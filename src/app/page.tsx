@@ -728,18 +728,37 @@ export default function Home() {
           {attemptsHistory.map((entry, idx) => (
             <div
               key={`${entry.guess}-${idx}`}
-              className="mb-2 p-3 border rounded bg-white/50"
+              className="mb-3 p-3 border rounded-lg bg-white shadow-sm"
             >
-              <p className="text-sm">
+              <p className="text-sm font-medium flex items-center justify-between">
                 Attempt {idx + 1}:{' '}
-                <strong className="break-words">{entry.guess}</strong> →{' '}
-                {entry.correct ? '✅ Correct' : '❌ Wrong'}
+                <strong className="break-words">{entry.guess}</strong>
+                <span>{entry.correct ? '✅' : '❌'}</span>
               </p>
-              {entry.feedback && (
+              {Array.isArray(entry.feedback) ? (
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  {entry.feedback.map((detail, detailIdx) => (
+                    <div
+                      key={`${detail.label}-${detailIdx}`}
+                      className={`rounded-md border px-2 py-1 flex flex-col gap-0.5 ${
+                        FEEDBACK_STYLES[detail.status] ||
+                        'border-slate-200 bg-slate-50 text-slate-800'
+                      }`}
+                    >
+                      <span className="uppercase tracking-wide text-[10px] text-gray-500">
+                        {detail.label}
+                      </span>
+                      <span className="font-semibold text-sm">
+                        {detail.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : entry.feedback ? (
                 <pre className="mt-1 text-xs text-gray-600 whitespace-pre-wrap">
-                  {entry.feedback}
+                  {entry.feedback as unknown as string}
                 </pre>
-              )}
+              ) : null}
             </div>
           ))}
         </div>
