@@ -1,6 +1,7 @@
-# Art Game
+# Art Game - 4rtW0rk
 
 Minimalist daily art guessing game powered by Next.js and Supabase.
+👉 https://4rtw0rk.vercel.app/
 
 ## Deploy
 1. Install deps: `npm install`.
