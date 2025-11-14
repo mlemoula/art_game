@@ -75,6 +75,7 @@ export default function ZoomableImage({
 
   return (
     <div
+      onContextMenu={(event) => event.preventDefault()}
       style={{
         width: lockWidthToImage ? `${targetWidth}px` : '100%',
         maxWidth: lockWidthToImage ? `${targetWidth}px` : '100%',
@@ -86,6 +87,9 @@ export default function ZoomableImage({
         alignItems: 'center',
         backgroundColor: '#eee',
         margin: '0 auto',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
       }}
     >
       <motion.img
@@ -96,9 +100,11 @@ export default function ZoomableImage({
         fetchPriority="high"
         decoding="async"
         onLoad={handleLoad}
+        draggable={false}
         style={{
           width: '100%',
           height: '100%',
+          pointerEvents: 'none',
           objectFit: fit,
           objectPosition: `${detailX} ${detailY}`,
           willChange: 'transform',
