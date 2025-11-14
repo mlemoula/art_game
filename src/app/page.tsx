@@ -94,12 +94,15 @@ const extractTextFromWikiJson = (payload: unknown): string => {
   if (typeof data.extract_html === 'string') return data.extract_html
   if (typeof data.summary === 'string') return data.summary
   if (typeof data.content === 'string') return data.content
-  const pages = data.query?.pages
-  if (pages && typeof pages === 'object') {
-    const firstPage = Object.values(pages)[0] as Record<string, unknown>
-    if (firstPage) {
-      if (typeof firstPage.extract === 'string') return firstPage.extract
-      if (typeof firstPage.summary === 'string') return firstPage.summary
+  const query = data.query
+  if (query && typeof query === 'object') {
+    const pages = (query as { pages?: unknown }).pages
+    if (pages && typeof pages === 'object') {
+      const firstPage = Object.values(pages)[0] as Record<string, unknown>
+      if (firstPage) {
+        if (typeof firstPage.extract === 'string') return firstPage.extract
+        if (typeof firstPage.summary === 'string') return firstPage.summary
+      }
     }
   }
   return ''
