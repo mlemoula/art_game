@@ -34,7 +34,7 @@ export default function ZoomableImage({
   const clampedAttempts = Math.min(Math.max(attempts, 0), safeMaxAttempts)
   const zoom = 5 - (clampedAttempts / safeMaxAttempts) * 4
   const baseRatio = width / height || 1
-  const [containerRatio, setContainerRatio] = useState<number>(baseRatio)
+  const [naturalRatio, setNaturalRatio] = useState<number | null>(null)
   const [maxContainerWidth, setMaxContainerWidth] = useState<number>(() => {
     if (typeof window === 'undefined') return width
     return Math.min(width, window.innerWidth - 32)
@@ -43,10 +43,6 @@ export default function ZoomableImage({
     if (typeof window === 'undefined') return height
     return Math.min(height, Math.round(window.innerHeight * 0.7))
   })
-
-  useEffect(() => {
-    setContainerRatio(baseRatio)
-  }, [baseRatio, src])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -62,9 +58,11 @@ export default function ZoomableImage({
   const handleLoad = (event: SyntheticEvent<HTMLImageElement>) => {
     const img = event.currentTarget
     if (img.naturalWidth && img.naturalHeight) {
-      setContainerRatio(img.naturalWidth / img.naturalHeight)
+      setNaturalRatio(img.naturalWidth / img.naturalHeight)
     }
   }
+
+  const containerRatio = naturalRatio || baseRatio
 
   const targetWidth = (() => {
     if (!lockWidthToImage) return maxContainerWidth

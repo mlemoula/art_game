@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import ZoomableImage from '@/components/ZoomableImage'
 import { getWikimediaUrls } from '@/utils/getWikimediaUrls'
 import {
@@ -16,6 +16,7 @@ const normalizeString = (str: string) =>
     .replace(/[\u0300-\u036f]/g, '')
 
 const FALLBACK_ARTISTS: ArtistRecommendation[] = []
+const PROGRESS_KEY_PREFIX = 'art-progress-'
 
 const mergeArtistData = (
   ...lists: Array<ArtistRecommendation[] | undefined>
@@ -88,14 +89,14 @@ const extractParagraphs = (raw: string) =>
 
 const extractTextFromWikiJson = (payload: unknown): string => {
   if (!payload || typeof payload !== 'object') return ''
-  const data = payload as Record<string, any>
+  const data = payload as Record<string, unknown>
   if (typeof data.extract === 'string') return data.extract
   if (typeof data.extract_html === 'string') return data.extract_html
   if (typeof data.summary === 'string') return data.summary
   if (typeof data.content === 'string') return data.content
   const pages = data.query?.pages
   if (pages && typeof pages === 'object') {
-    const firstPage = Object.values(pages)[0] as Record<string, any>
+    const firstPage = Object.values(pages)[0] as Record<string, unknown>
     if (firstPage) {
       if (typeof firstPage.extract === 'string') return firstPage.extract
       if (typeof firstPage.summary === 'string') return firstPage.summary
@@ -127,6 +128,7 @@ export default function Home() {
   const [guess, setGuess] = useState('')
   const [finished, setFinished] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [shareMessage, setShareMessage] = useState('')
   const [attemptsHistory, setAttemptsHistory] = useState<Attempt[]>([])
   const [artistHints, setArtistHints] =
     useState<ArtistRecommendation[]>(FALLBACK_ARTISTS)
@@ -134,7 +136,11 @@ export default function Home() {
   const [playSaved, setPlaySaved] = useState(false)
   const [playStats, setPlayStats] = useState<{ total: number; wins: number } | null>(null)
   const [wikiIntro, setWikiIntro] = useState<string[]>([])
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
   const maxAttempts = 5
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const blurTimeoutRef = useRef<number | null>(null)
 
   // Récupérer l'art du jour
   useEffect(() => {
@@ -149,18 +155,56 @@ export default function Home() {
   const { thumb, medium, hd } = mediaUrls
   const baseSrc = thumb || medium || hd || ''
   const attemptsCount = attemptsHistory.length
+  const artId = art?.id ?? null
 
-  // Reset gameplay quand nouvelle oeuvre arrive
+  // Reset gameplay quand nouvelle oeuvre arrive et restaurer progression locale
   useEffect(() => {
-    if (!art?.id) return
-    setGuess('')
-    setFinished(false)
-    setSuccess(false)
-    setAttemptsHistory([])
+    if (!artId) return
     setArtistHints(FALLBACK_ARTISTS)
     setMediumLoaded(false)
-    setPlaySaved(false)
-  }, [art?.id])
+    setShareMessage('')
+    setSuggestionsOpen(false)
+    setHighlightedSuggestion(0)
+
+    const resetCoreState = () => {
+      setGuess('')
+      setFinished(false)
+      setSuccess(false)
+      setAttemptsHistory([])
+      setPlaySaved(false)
+    }
+
+    if (typeof window === 'undefined') {
+      resetCoreState()
+      return
+    }
+
+    const key = `${PROGRESS_KEY_PREFIX}${artId}`
+    const stored = window.localStorage.getItem(key)
+    if (!stored) {
+      resetCoreState()
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(stored) as {
+        currentGuess?: string
+        finished?: boolean
+        success?: boolean
+        attemptsHistory?: Attempt[]
+        playSaved?: boolean
+      }
+      setGuess(parsed.currentGuess || '')
+      setFinished(Boolean(parsed.finished))
+      setSuccess(Boolean(parsed.success))
+      setAttemptsHistory(
+        Array.isArray(parsed.attemptsHistory) ? parsed.attemptsHistory : []
+      )
+      setPlaySaved(Boolean(parsed.playSaved))
+    } catch {
+      resetCoreState()
+    }
+  }, [artId])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -172,6 +216,14 @@ export default function Home() {
       window.localStorage.setItem('art_game_user_token', token)
     }
     setUserToken(token)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current && typeof window !== 'undefined') {
+        window.clearTimeout(blurTimeoutRef.current)
+      }
+    }
   }, [])
 
   // Suggestions artistes dynamiques & métadonnées pour feedback
@@ -394,10 +446,24 @@ export default function Home() {
     )
   }, [artistHints, targetArtist])
   const MIN_SUGGESTION_LENGTH = 2
+  const MAX_SUGGESTIONS = 25
+  const deferredGuess = useDeferredValue(guess)
   const filteredSuggestions = useMemo(() => {
-    if (guess.length < MIN_SUGGESTION_LENGTH) return []
-    return artistSuggestions
-  }, [artistSuggestions, guess])
+    if (deferredGuess.trim().length < MIN_SUGGESTION_LENGTH) return []
+    const needle = normalizeString(deferredGuess.trim())
+    const results: string[] = []
+    for (const name of artistSuggestions) {
+      if (normalizeString(name).includes(needle)) {
+        results.push(name)
+      }
+      if (results.length >= MAX_SUGGESTIONS) break
+    }
+    return results
+  }, [artistSuggestions, deferredGuess])
+  useEffect(() => {
+    setHighlightedSuggestion(0)
+  }, [deferredGuess, filteredSuggestions.length])
+  const showSuggestions = suggestionsOpen && filteredSuggestions.length > 0
 
   const imageSrcSet = useMemo(() => {
     const entries = [
@@ -452,10 +518,10 @@ export default function Home() {
   const isDisplayReady = Boolean(displaySrc && srcReady)
 
   useEffect(() => {
-    if (!finished || !art || !userToken || playSaved || !attemptsHistory.length)
+    if (!finished || !artId || !userToken || playSaved || !attemptsHistory.length)
       return
     const payload = {
-      daily_id: art.id,
+      daily_id: artId,
       attempts: attemptsHistory.length,
       success,
       user_token: userToken,
@@ -470,7 +536,75 @@ export default function Home() {
       }
     }
     persistPlay()
-  }, [finished, art?.id, userToken, playSaved, attemptsHistory, success])
+  }, [finished, artId, userToken, playSaved, attemptsHistory, success])
+
+  const shareGlyphs = useMemo(() => {
+    const tokens = Array.from({ length: maxAttempts }, (_, idx) => {
+      const attempt = attemptsHistory[idx]
+      if (!attempt) return '.'
+      return attempt.correct ? '✅' : '×'
+    })
+    return tokens.join(' ')
+  }, [attemptsHistory, maxAttempts])
+
+  const buildShareContent = () => {
+    if (!art) return ''
+    const grid = shareGlyphs || '. . . . .'
+    const urlHint =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : '')
+    const parts = [grid, 'Can you beat me?']
+    if (urlHint) parts.push(urlHint)
+    return parts.join('\n')
+  }
+
+  const handleShare = async () => {
+    if (!finished) return
+    const shareContent = buildShareContent()
+    if (!shareContent) return
+    const nav =
+      typeof navigator !== 'undefined'
+        ? (navigator as Navigator & {
+            share?: (data: ShareData) => Promise<void>
+            clipboard?: Clipboard
+          })
+        : undefined
+    setShareMessage('')
+    try {
+      if (nav?.share) {
+        await nav.share({
+          title: '4rtW0rk',
+          text: shareContent,
+        })
+        setShareMessage('Shared with your device dialog.')
+      } else if (nav?.clipboard?.writeText) {
+        await nav.clipboard.writeText(shareContent)
+        setShareMessage('Result copied to clipboard.')
+      } else {
+        setShareMessage(shareContent)
+      }
+    } catch {
+      setShareMessage('Share canceled or unavailable.')
+    }
+  }
+
+  // Sauvegarde locale de la progression du jour
+  useEffect(() => {
+    if (!artId || typeof window === 'undefined') return
+    const key = `${PROGRESS_KEY_PREFIX}${artId}`
+    const payload = {
+      currentGuess: guess,
+      finished,
+      success,
+      attemptsHistory,
+      playSaved,
+    }
+    try {
+      window.localStorage.setItem(key, JSON.stringify(payload))
+    } catch {
+      // ignore storage failures
+    }
+  }, [artId, guess, finished, success, attemptsHistory, playSaved])
 
   if (!art) {
     return (
@@ -537,9 +671,10 @@ export default function Home() {
     )
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (overrideGuess?: string) => {
     if (finished || !art) return
-    const trimmedGuess = guess.trim()
+    const rawGuess = typeof overrideGuess === 'string' ? overrideGuess : guess
+    const trimmedGuess = rawGuess.trim()
     if (!trimmedGuess) return
 
     const correctArtist = normalize(art.artist)
@@ -556,7 +691,6 @@ export default function Home() {
 
     const feedbackDetails: FeedbackDetail[] = []
     const artYearNumber = parseInt(art.year, 10)
-    const hasArtYear = !Number.isNaN(artYearNumber)
     const guessedProfile = await getArtistProfile(trimmedGuess)
     const localGuessMeta = artistHints.find(
       (hint) => normalize(hint.name) === guessNorm
@@ -651,9 +785,52 @@ export default function Home() {
       setFinished(true)
     }
     setGuess('')
+    setSuggestionsOpen(false)
+  }
+
+  const selectSuggestion = (name: string, submitAfter = false) => {
+    setGuess(name)
+    setSuggestionsOpen(false)
+    setHighlightedSuggestion(0)
+    if (submitAfter) {
+      setTimeout(() => {
+        void handleSubmit(name)
+      }, 0)
+    }
+  }
+
+  const clearPendingBlur = () => {
+    if (blurTimeoutRef.current && typeof window !== 'undefined') {
+      window.clearTimeout(blurTimeoutRef.current)
+      blurTimeoutRef.current = null
+    }
+  }
+
+  const handleInputFocus = () => {
+    clearPendingBlur()
+    setSuggestionsOpen(true)
+  }
+
+  const handleInputBlur = () => {
+    if (typeof window === 'undefined') {
+      setSuggestionsOpen(false)
+      return
+    }
+    clearPendingBlur()
+    blurTimeoutRef.current = window.setTimeout(() => {
+      setSuggestionsOpen(false)
+      blurTimeoutRef.current = null
+    }, 120)
   }
 
   const placeholderText = 'Who painted this?'
+  const attemptsUsed = attemptsHistory.length
+  const outcomeLabel = finished ? (success ? 'Victory' : 'Not this time') : ''
+  const outcomeSubline = finished
+    ? success
+      ? 'Great eye — see you tomorrow.'
+      : 'New masterpiece tomorrow, stay sharp.'
+    : ''
   const frameOuterClass = finished
     ? 'w-full sm:w-auto max-w-[420px] rounded-2xl border border-gray-300 bg-gray-50 p-3 shadow-sm transition-all duration-300 mx-auto'
     : 'w-full max-w-[420px] rounded-xl border border-gray-200 bg-white transition-all duration-300'
@@ -689,6 +866,7 @@ export default function Home() {
         <div className={frameInnerClass}>
           {isDisplayReady && displaySrc ? (
             <ZoomableImage
+              key={displaySrc}
               src={displaySrc}
               srcSet={displaySrcSet}
               width={400}
@@ -722,31 +900,99 @@ export default function Home() {
           <label htmlFor="guess-input" className="sr-only">
             Guess the painter
           </label>
-          <input
-            id="guess-input"
-            name="guess"
-            type="text"
-            list="artist-suggestions"
-            autoComplete="on"
-            value={guess}
-            onChange={(e) => setGuess(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void handleSubmit()
-              }
-            }}
-            placeholder={placeholderText}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm tracking-tight bg-white"
-          />
-          <datalist id="artist-suggestions">
-            {filteredSuggestions.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
+          <div className="relative w-full">
+            <input
+              id="guess-input"
+              ref={inputRef}
+              name="guess"
+              type="text"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              inputMode="text"
+              value={guess}
+              onFocus={handleInputFocus}
+              onBlur={handleInputBlur}
+              onChange={(e) => {
+                setGuess(e.target.value)
+                setSuggestionsOpen(true)
+              }}
+              onKeyDown={(e) => {
+                if (showSuggestions && filteredSuggestions.length) {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    setHighlightedSuggestion((prev) =>
+                      prev + 1 >= filteredSuggestions.length ? 0 : prev + 1
+                    )
+                    return
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    setHighlightedSuggestion((prev) =>
+                      prev - 1 < 0
+                        ? filteredSuggestions.length - 1
+                        : prev - 1
+                    )
+                    return
+                  }
+                  if (e.key === 'Tab') {
+                    setSuggestionsOpen(false)
+                    return
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault()
+                    setSuggestionsOpen(false)
+                    return
+                  }
+                }
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  if (showSuggestions && filteredSuggestions.length) {
+                    const choice =
+                      filteredSuggestions[highlightedSuggestion] ||
+                      filteredSuggestions[0]
+                    selectSuggestion(choice, true)
+                    return
+                  }
+                  void handleSubmit()
+                }
+              }}
+              placeholder={placeholderText}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-base tracking-tight bg-white"
+              style={{ fontSize: '16px' }}
+            />
+            {showSuggestions && (
+              <ul className="absolute left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto border border-gray-200 rounded-xl bg-white shadow-lg z-10">
+                {filteredSuggestions.map((name, idx) => {
+                  const active = idx === highlightedSuggestion
+                  return (
+                    <li
+                      key={name}
+                      className={`px-3 py-2 text-xs cursor-pointer ${
+                        active
+                          ? 'bg-gray-900 text-white'
+                          : 'bg-white text-gray-800'
+                      } ${idx !== filteredSuggestions.length - 1 ? 'border-b border-gray-100' : ''}`}
+                      onMouseEnter={() => setHighlightedSuggestion(idx)}
+                      onMouseDown={(event) => {
+                        event.preventDefault()
+                        clearPendingBlur()
+                        selectSuggestion(name)
+                      }}
+                    >
+                      {name}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
           <button
             type="button"
-            onClick={() => void handleSubmit()}
+            onClick={() => {
+              setSuggestionsOpen(false)
+              void handleSubmit()
+            }}
             className="w-full border border-gray-900 text-gray-900 rounded px-3 py-2 text-sm tracking-tight hover:bg-gray-100 transition-colors"
           >
             Submit
@@ -774,8 +1020,23 @@ export default function Home() {
 
       {finished && (
         <div className="mt-6 text-center max-w-lg space-y-4">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 text-xs tracking-wide uppercase text-gray-600">
-            {success ? 'Success, come back tomorrow' : 'Better luck tomorrow'}
+          <div className="w-full max-w-[320px] mx-auto border border-gray-200 rounded-2xl p-4 text-left space-y-2 bg-white shadow-sm">
+            <p className="text-[11px] uppercase tracking-wide text-gray-500">
+              Today&apos;s score
+            </p>
+            <p className="text-sm text-gray-900">{outcomeLabel}</p>
+            <p className="text-[11px] text-gray-500">{outcomeSubline}</p>
+            <p className="font-mono text-lg tracking-wider text-gray-800">{shareGlyphs}</p>
+            <button
+              type="button"
+              onClick={() => void handleShare()}
+              className="w-full border border-gray-900 text-gray-900 rounded px-3 py-2 text-xs tracking-tight hover:bg-gray-100 transition-colors"
+            >
+              Share result
+            </button>
+            {shareMessage && (
+              <p className="text-[10px] text-gray-500">{shareMessage}</p>
+            )}
           </div>
           <div className="mt-4 w-full space-y-3 text-left">
             {infoParagraphs.map((paragraph, idx) => (
