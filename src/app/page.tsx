@@ -1066,6 +1066,17 @@ export default function Home() {
           {renderAttempts('mt-6 w-[320px] mx-auto space-y-2.5 text-left')}
         </div>
       )}
+      <p className="mt-8 text-[10px] text-gray-400 tracking-wide uppercase text-center">
+        Crafted with care -{' '}
+        <a
+          href="https://www.linkedin.com/in/martin-lemoulant/"
+          target="_blank"
+          rel="noreferrer"
+          className="underline decoration-dotted hover:text-gray-600 transition-colors"
+        >
+          send feedback
+        </a>
+      </p>
       <Analytics />
     </div>
   )
