@@ -1,4 +1,5 @@
 'use client'
+import { useEffect, useState, type SyntheticEvent } from 'react'
 import { motion } from 'framer-motion'
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
   maxAttempts: number
   detailX?: string
   detailY?: string
+  fit?: 'cover' | 'contain'
 }
 
 export default function ZoomableImage({
@@ -23,17 +25,52 @@ export default function ZoomableImage({
   maxAttempts,
   detailX = '50%',
   detailY = '50%',
+  fit = 'cover',
 }: Props) {
   // Zoom : 0 essais -> zoom max (5x), maxAttempts -> 1x
   const safeMaxAttempts = Math.max(maxAttempts, 1)
   const clampedAttempts = Math.min(Math.max(attempts, 0), safeMaxAttempts)
   const zoom = 5 - (clampedAttempts / safeMaxAttempts) * 4
+  const baseRatio = width / height || 1
+  const [containerRatio, setContainerRatio] = useState<number>(baseRatio)
+  const [maxContainerWidth, setMaxContainerWidth] = useState<number>(() => {
+    if (typeof window === 'undefined') return width
+    return Math.min(width, window.innerWidth - 32)
+  })
+  const [maxContainerHeight, setMaxContainerHeight] = useState<number>(() => {
+    if (typeof window === 'undefined') return height
+    return Math.min(height, Math.round(window.innerHeight * 0.7))
+  })
+
+  useEffect(() => {
+    setContainerRatio(baseRatio)
+  }, [baseRatio, src])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const computeSize = () => {
+      setMaxContainerWidth(Math.min(width, window.innerWidth - 32))
+      setMaxContainerHeight(Math.min(height, Math.round(window.innerHeight * 0.7)))
+    }
+    computeSize()
+    window.addEventListener('resize', computeSize)
+    return () => window.removeEventListener('resize', computeSize)
+  }, [width, height])
+
+  const handleLoad = (event: SyntheticEvent<HTMLImageElement>) => {
+    const img = event.currentTarget
+    if (img.naturalWidth && img.naturalHeight) {
+      setContainerRatio(img.naturalWidth / img.naturalHeight)
+    }
+  }
 
   return (
     <div
       style={{
-        width,
-        height,
+        width: '100%',
+        maxWidth: maxContainerWidth,
+        maxHeight: maxContainerHeight,
+        aspectRatio: containerRatio,
         overflow: 'hidden',
         display: 'flex',
         justifyContent: 'center',
@@ -48,10 +85,11 @@ export default function ZoomableImage({
         loading="eager"
         fetchPriority="high"
         decoding="async"
+        onLoad={handleLoad}
         style={{
-          width,
-          height,
-          objectFit: 'cover',
+          width: '100%',
+          height: '100%',
+          objectFit: fit,
           objectPosition: `${detailX} ${detailY}`,
           willChange: 'transform',
           transformOrigin: `${detailX} ${detailY}`,

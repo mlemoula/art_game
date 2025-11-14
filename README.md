@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Art Game
 
-## Getting Started
+Minimalist daily art guessing game powered by Next.js and Supabase.
 
-First, run the development server:
+## Deploy
+1. Install deps: `npm install`.
+2. Build locally: `npm run build`.
+3. Deploy via Vercel/Netlify. Set env vars:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `NEXT_PUBLIC_ENABLE_SUPABASE_ARTISTS=true`
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Data refresh workflow
+1. Export existing artworks (`SELECT image_url FROM daily_art`).
+2. Run `node generate_daily_art.js` (script skips rows missing image/year/museum and artists absent from `artists_rows.csv`).
+3. Import the new `artworks_generated.csv` into Supabase, scheduling dates for the next 100+ days.
+
+## Plays table
+Create once in Supabase SQL editor:
+```sql
+create table public.plays (
+  id bigint generated always as identity primary key,
+  daily_id bigint references daily_art(id) on delete cascade,
+  attempts int not null,
+  success boolean not null,
+  user_token text,
+  created_at timestamptz default now()
+);
 ```
+`page.tsx` already writes to this table; later you can build stats dashboards off it.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Next ideas
+- Add an admin view listing upcoming artworks.
+- Surface player stats (win rate, streak) in UI.
+- Reintroduce sharing once ready (data already available).

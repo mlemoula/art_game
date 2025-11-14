@@ -3,13 +3,18 @@ import { supabase } from '@/lib/supabaseClient'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
+
   const { data, error } = await supabase
     .from('daily_art')
     .select('*')
-    .order('id', { ascending: false })
-    .limit(1)
+    .eq('date', todayStr)
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    const status = error.code === 'PGRST116' ? 404 : 500
+    return NextResponse.json({ error: error.message }, { status })
+  }
   return NextResponse.json(data)
 }

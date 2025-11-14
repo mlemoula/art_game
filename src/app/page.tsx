@@ -393,6 +393,12 @@ export default function Home() {
       (hint) => normalizeString(hint.name || '') === key
     )
   }, [artistHints, targetArtist])
+  const MIN_SUGGESTION_LENGTH = 2
+  const filteredSuggestions = useMemo(() => {
+    if (guess.length < MIN_SUGGESTION_LENGTH) return []
+    return artistSuggestions
+  }, [artistSuggestions, guess])
+
   const imageSrcSet = useMemo(() => {
     const entries = [
       thumb && `${thumb} 480w`,
@@ -648,9 +654,15 @@ export default function Home() {
   }
 
   const placeholderText = 'Who painted this?'
+  const frameOuterClass = finished
+    ? 'w-full max-w-[420px] rounded-2xl border border-gray-300 bg-gray-50 p-3 shadow-sm transition-all duration-300'
+    : 'w-full max-w-[420px] rounded-xl border border-gray-200 bg-white transition-all duration-300'
+  const frameInnerClass = finished
+    ? 'overflow-hidden rounded-xl border border-gray-100 bg-white'
+    : 'overflow-hidden rounded-lg'
 
   return (
-    <div className="flex flex-col items-center p-4 min-h-screen bg-white text-gray-900 font-mono">
+    <div className="flex flex-col items-center px-4 sm:px-6 py-4 min-h-screen bg-white text-gray-900 font-mono">
       <style jsx global>{`
         @keyframes confetti-fall {
           0% {
@@ -673,23 +685,26 @@ export default function Home() {
       <h1 className="text-xl font-normal mb-6 tracking-tight uppercase">4rtW0rk</h1>
 
       {/* Affiche placeholder jusqu'à ce que l'image jouable soit prête */}
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
-        {isDisplayReady && displaySrc ? (
-          <ZoomableImage
-            src={displaySrc}
-            srcSet={displaySrcSet}
-            width={400}
-            height={300}
-            attempts={displayAttempts}
-            maxAttempts={maxAttempts}
-            detailX="50%"
-            detailY="30%"
-          />
-        ) : (
-          <div className="w-[400px] h-[300px] flex items-center justify-center text-gray-500 text-xs tracking-wide">
-            Loading…
-          </div>
-        )}
+      <div className={frameOuterClass}>
+        <div className={frameInnerClass}>
+          {isDisplayReady && displaySrc ? (
+            <ZoomableImage
+              src={displaySrc}
+              srcSet={displaySrcSet}
+              width={400}
+              height={300}
+              attempts={displayAttempts}
+              maxAttempts={maxAttempts}
+              detailX="50%"
+              detailY="30%"
+              fit={finished ? 'contain' : 'cover'}
+            />
+          ) : (
+            <div className="w-full aspect-[4/3] flex items-center justify-center text-gray-500 text-xs tracking-wide bg-gray-50">
+              Loading…
+            </div>
+          )}
+        </div>
       </div>
 
       {finished && (
@@ -702,7 +717,7 @@ export default function Home() {
       )}
 
       {!finished && (
-        <div className="flex flex-col items-center mt-6 space-y-3 w-[320px]">
+        <div className="flex flex-col items-center mt-6 space-y-3 w-full max-w-[360px]">
           <label htmlFor="guess-input" className="sr-only">
             Guess the painter
           </label>
@@ -724,7 +739,7 @@ export default function Home() {
             className="w-full border border-gray-300 rounded px-3 py-2 text-sm tracking-tight bg-white"
           />
           <datalist id="artist-suggestions">
-            {artistSuggestions.map((name) => (
+            {filteredSuggestions.map((name) => (
               <option key={name} value={name} />
             ))}
           </datalist>
