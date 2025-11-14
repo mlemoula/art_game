@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "4rtW0rk - Who painted this?'",
+  title: "4rtW0rk - Who painted this?",
   description: "Test your art knowledge! Guess the artist behind famous paintings in this daily art quiz game, inspired by Wordle and Spotle. Challenge yourself and discover amazing artworks every day.",
 };
 
