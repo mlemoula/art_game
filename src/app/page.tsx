@@ -56,13 +56,13 @@ interface Attempt {
   feedback: FeedbackDetail[]
 }
 
-const FEEDBACK_STYLES: Record<FeedbackStatus, string> = {
-  match: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-  earlier: 'border-amber-200 bg-amber-50 text-amber-900',
-  later: 'border-amber-200 bg-amber-50 text-amber-900',
-  different: 'border-rose-200 bg-rose-50 text-rose-900',
-  info: 'border-slate-200 bg-slate-50 text-slate-800',
-  missing: 'border-gray-200 bg-gray-50 text-gray-500',
+const FEEDBACK_TONES: Record<FeedbackStatus, string> = {
+  match: 'text-emerald-700',
+  earlier: 'text-amber-700',
+  later: 'text-amber-700',
+  different: 'text-rose-700',
+  info: 'text-slate-600',
+  missing: 'text-gray-500',
 }
 
 const DEFAULT_ARTIST_SUGGESTIONS = FALLBACK_ARTISTS.map((artist) => artist.name)
@@ -127,13 +127,12 @@ export default function Home() {
   const [guess, setGuess] = useState('')
   const [finished, setFinished] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [shareUrl, setShareUrl] = useState('')
-  const [shareMessage, setShareMessage] = useState('')
   const [attemptsHistory, setAttemptsHistory] = useState<Attempt[]>([])
   const [artistHints, setArtistHints] =
     useState<ArtistRecommendation[]>(FALLBACK_ARTISTS)
   const [userToken, setUserToken] = useState('')
   const [playSaved, setPlaySaved] = useState(false)
+  const [playStats, setPlayStats] = useState<{ total: number; wins: number } | null>(null)
   const [wikiIntro, setWikiIntro] = useState<string[]>([])
   const maxAttempts = 5
 
@@ -151,12 +150,6 @@ export default function Home() {
   const baseSrc = thumb || medium || hd || ''
   const attemptsCount = attemptsHistory.length
 
-  // Capture URL pour les liens de partage
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    setShareUrl(window.location.href)
-  }, [])
-
   // Reset gameplay quand nouvelle oeuvre arrive
   useEffect(() => {
     if (!art?.id) return
@@ -164,7 +157,6 @@ export default function Home() {
     setFinished(false)
     setSuccess(false)
     setAttemptsHistory([])
-    setShareMessage('')
     setArtistHints(FALLBACK_ARTISTS)
     setMediumLoaded(false)
     setPlaySaved(false)
@@ -189,18 +181,58 @@ export default function Home() {
       return
     }
     let cancelled = false
-    getArtistRecommendations(art.artist, 500)
-      .then((data) => {
-        if (!cancelled)
-          setArtistHints(mergeArtistData(FALLBACK_ARTISTS, data || []))
-      })
-      .catch(() => {
+    const loadHints = async () => {
+      try {
+        const [recs, profile] = await Promise.all([
+          getArtistRecommendations(art.artist, 500),
+          getArtistProfile(art.artist),
+        ])
+        if (!cancelled) {
+          setArtistHints(
+            mergeArtistData(
+              profile ? [profile] : undefined,
+              recs || [],
+              FALLBACK_ARTISTS
+            )
+          )
+        }
+      } catch {
         if (!cancelled) setArtistHints(FALLBACK_ARTISTS)
-      })
+      }
+    }
+    loadHints()
     return () => {
       cancelled = true
     }
   }, [art?.artist])
+
+  // Statistiques utilisateur pour personnaliser l'expérience
+  useEffect(() => {
+    if (!userToken) return
+    let cancelled = false
+
+    const fetchStats = async () => {
+      try {
+        const { data } = await supabase
+          .from('plays')
+          .select('success')
+          .eq('user_token', userToken)
+
+        if (!cancelled && data) {
+          const total = data.length
+          const wins = data.filter((row) => row.success).length
+          setPlayStats({ total, wins })
+        }
+      } catch {
+        if (!cancelled) setPlayStats(null)
+      }
+    }
+
+    fetchStats()
+    return () => {
+      cancelled = true
+    }
+  }, [userToken, playSaved])
 
   // Récupération intro Wikipedia (3-4 paragraphes)
   useEffect(() => {
@@ -342,20 +374,25 @@ export default function Home() {
     }
   }, [medium])
 
-  const shareScore = success ? attemptsCount : 0
-  const shareText = `I just played 4rtW0rk and scored ${shareScore}/${maxAttempts}! Can you beat me?`
   const targetArtist = art?.artist ?? ''
   const artistSuggestions = useMemo(() => {
-    const names = new Set<string>()
-    if (targetArtist) names.add(targetArtist)
-    artistHints.forEach((hint) => hint.name && names.add(hint.name))
-    DEFAULT_ARTIST_SUGGESTIONS.forEach((name) => names.add(name))
-    return Array.from(names).filter(Boolean)
+    const map = new Map<string, string>()
+    const addName = (name?: string) => {
+      if (!name) return
+      const key = normalizeString(name)
+      if (!map.has(key)) map.set(key, name)
+    }
+    addName(targetArtist)
+    artistHints.forEach((hint) => addName(hint.name))
+    DEFAULT_ARTIST_SUGGESTIONS.forEach(addName)
+    return Array.from(map.values())
   }, [targetArtist, artistHints])
-  const artistMeta = useMemo(
-    () => artistHints.find((hint) => hint.name === targetArtist),
-    [artistHints, targetArtist]
-  )
+  const artistMeta = useMemo(() => {
+    const key = normalizeString(targetArtist || '')
+    return artistHints.find(
+      (hint) => normalizeString(hint.name || '') === key
+    )
+  }, [artistHints, targetArtist])
   const imageSrcSet = useMemo(() => {
     const entries = [
       thumb && `${thumb} 480w`,
@@ -431,21 +468,8 @@ export default function Home() {
 
   if (!art) {
     return (
-      <div className="flex flex-col items-center p-4">
-        <h1 className="text-2xl font-bold mb-4">4rtW0rk</h1>
-        <div
-          style={{
-            width: 400,
-            height: 300,
-            background: '#eee',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            color: '#666',
-          }}
-        >
-          Loading artwork...
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-white text-gray-600 font-mono">
+        <span className="text-xs tracking-wide uppercase">Loading…</span>
       </div>
     )
   }
@@ -460,11 +484,51 @@ export default function Home() {
   const infoParagraphs = wikiIntro.length ? wikiIntro : [fallbackIntro]
 
   const normalize = normalizeString
-  const extractYear = (value: string) => {
-    const match = value.match(/\d{4}/)
-    if (!match) return null
-    const parsed = parseInt(match[0], 10)
-    return Number.isNaN(parsed) ? null : parsed
+
+  const renderAttempts = (containerClass = 'mt-6 w-80 space-y-2.5') => {
+    if (!attemptsHistory.length) return null
+    const reversed = [...attemptsHistory].reverse()
+    return (
+      <div className={containerClass}>
+        {reversed.map((entry, idx) => {
+          const attemptNumber = attemptsHistory.length - idx
+          return (
+            <div
+              key={`${entry.guess}-${idx}`}
+              className="p-3 border border-gray-100 rounded-xl bg-white/80 shadow-sm"
+            >
+              <div className="text-xs flex items-center justify-between text-slate-600 mb-1">
+                <span className="truncate">
+                  Attempt {attemptNumber}: {entry.guess}
+                </span>
+                <span>{entry.correct ? '✓' : '–'}</span>
+              </div>
+              {Array.isArray(entry.feedback) ? (
+                <ul className="text-[11px] space-y-1 text-gray-600">
+                  {entry.feedback.map((detail, detailIdx) => (
+                    <li
+                      key={`${detail.label}-${detailIdx}`}
+                      className="flex items-center justify-between border-b border-gray-100 pb-1.5 last:border-b-0"
+                    >
+                      <span className="text-slate-500">{detail.label}</span>
+                      <span
+                        className={`font-normal ${FEEDBACK_TONES[detail.status] || 'text-slate-700'}`}
+                      >
+                        {detail.value}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : entry.feedback ? (
+                <pre className="mt-1 text-[11px] text-gray-600 whitespace-pre-wrap">
+                  {entry.feedback as unknown as string}
+                </pre>
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
+    )
   }
 
   const handleSubmit = async () => {
@@ -493,61 +557,49 @@ export default function Home() {
     )
     const guessedArtistData = guessedProfile || localGuessMeta || null
 
+    const pushDetail = (label: string, value: string, status: FeedbackStatus) =>
+      feedbackDetails.push({ label, value, status })
+
     if (correct) {
       feedbackDetails.push({
         label: 'Status',
-        value: 'Exact match! ✅',
+        value: 'Exact match!',
         status: 'match',
       })
     } else {
-      const guessedYear = extractYear(trimmedGuess)
-      if (hasArtYear) {
-        if (guessedYear !== null) {
-          const diff = guessedYear - artYearNumber
-          feedbackDetails.push({
-            label: 'Painting year',
-            value:
-              diff === 0
-                ? 'Perfect timing'
-                : `${Math.abs(diff)} year(s) ${
-                    diff > 0 ? 'later' : 'earlier'
-                  }`,
-            status: diff === 0 ? 'match' : diff > 0 ? 'later' : 'earlier',
-          })
-        } else {
-          feedbackDetails.push({
-            label: 'Painting year',
-            value: 'No year mentioned',
-            status: 'info',
-          })
-        }
+      const birth = guessedArtistData?.birth_year
+      const death = guessedArtistData?.death_year
+
+      if (birth) {
+        const aliveDuringPainting =
+          death && artYearNumber >= birth && artYearNumber <= death
+        pushDetail(
+          'Birth year',
+          String(birth),
+          aliveDuringPainting ? 'match' : 'info'
+        )
+      } else {
+        pushDetail('Birth year', '—', 'missing')
       }
 
-      const compareArtistYear = (
-        label: 'Birth' | 'Death',
-        actual?: number | null,
-        guessYear?: number | null
-      ) => {
-        if (!actual || !artistMeta) return
-        if (!guessYear) {
-          feedbackDetails.push({
-            label: `${label} year`,
-            value: 'No data',
-            status: 'missing',
-          })
-          return
+      if (death) {
+        pushDetail(
+          'Death year',
+          String(death),
+          artYearNumber > death ? 'earlier' : 'info'
+        )
+      } else {
+        pushDetail('Death year', '—', 'missing')
+      }
+
+      if (birth && death) {
+        if (artYearNumber < birth) {
+          pushDetail('Era hint', '🔺 Try an older artist', 'earlier')
+        } else if (artYearNumber > death) {
+          pushDetail('Era hint', '🔻 Try a more recent artist', 'later')
+        } else {
+          pushDetail('Era hint', 'Within their lifetime', 'match')
         }
-        const delta = guessYear - actual
-        feedbackDetails.push({
-          label: `${label} year`,
-          value:
-            delta === 0
-              ? 'Match'
-              : `${Math.abs(delta)} year(s) ${
-                  delta > 0 ? 'later' : 'earlier'
-                }`,
-          status: delta === 0 ? 'match' : delta > 0 ? 'later' : 'earlier',
-        })
       }
 
       const compareField = (
@@ -555,34 +607,23 @@ export default function Home() {
         actual?: string | null,
         guessField?: string | null
       ) => {
-        if (!actual || !artistMeta) return
         if (!guessField) {
-          feedbackDetails.push({
-            label,
-            value: 'No data',
-            status: 'missing',
-          })
+          pushDetail(label, '—', 'missing')
+          return
+        }
+        if (!actual || !artistMeta) {
+          pushDetail(label, guessField, 'info')
           return
         }
         const match = normalize(actual) === normalize(guessField)
-        feedbackDetails.push({
-          label,
-          value: guessField,
-          status: match ? 'match' : 'different',
-        })
+        pushDetail(label, guessField, match ? 'match' : 'different')
       }
 
-      compareArtistYear('Birth', artistMeta?.birth_year, guessedArtistData?.birth_year)
-      compareArtistYear('Death', artistMeta?.death_year, guessedArtistData?.death_year)
       compareField('Movement', artistMeta?.movement, guessedArtistData?.movement)
       compareField('Country', artistMeta?.country, guessedArtistData?.country)
 
       if (!guessedArtistData) {
-        feedbackDetails.push({
-          label: 'Data',
-          value: 'No reference yet for this artist.',
-          status: 'info',
-        })
+        pushDetail('Data', 'No reference yet for this artist.', 'info')
       }
     }
 
@@ -606,76 +647,62 @@ export default function Home() {
     setGuess('')
   }
 
-  const handleShare = async () => {
-    if (!finished) return
-    const shareContent = `${shareText}\n${art.title} by ${art.artist} (${art.year})`
-    const urlToShare =
-      shareUrl || (typeof window !== 'undefined' ? window.location.href : '')
-    const nav =
-      typeof navigator !== 'undefined'
-        ? (navigator as Navigator & {
-            share?: (data: ShareData) => Promise<void>
-            clipboard?: Clipboard
-          })
-        : undefined
-
-    setShareMessage('')
-
-    try {
-      if (nav?.share && urlToShare) {
-        await nav.share({
-          title: '4rtW0rk',
-          text: shareContent,
-          url: urlToShare,
-        })
-        setShareMessage('Shared with your device dialog! 🙌')
-      } else if (nav?.clipboard?.writeText) {
-        await nav.clipboard.writeText(`${shareContent}\n${urlToShare}`)
-        setShareMessage('Result copied to clipboard 📋')
-      } else {
-        setShareMessage(`${shareContent}\n${urlToShare}`)
-      }
-    } catch {
-      setShareMessage('Share canceled or unavailable.')
-    }
-  }
-
   const placeholderText = 'Who painted this?'
 
   return (
-    <div className="flex flex-col items-center p-4">
-      <h1 className="text-2xl font-bold mb-4">4rtW0rk</h1>
+    <div className="flex flex-col items-center p-4 min-h-screen bg-white text-gray-900 font-mono">
+      <style jsx global>{`
+        @keyframes confetti-fall {
+          0% {
+            transform: translateY(-20px);
+            opacity: 0;
+          }
+          20% {
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(60px);
+            opacity: 0;
+          }
+        }
+
+        .animate-fall {
+          animation: confetti-fall 1.2s ease-out forwards;
+        }
+      `}</style>
+      <h1 className="text-xl font-normal mb-6 tracking-tight uppercase">4rtW0rk</h1>
 
       {/* Affiche placeholder jusqu'à ce que l'image jouable soit prête */}
-      {isDisplayReady && displaySrc ? (
-        <ZoomableImage
-          src={displaySrc}
-          srcSet={displaySrcSet}
-          width={400}
-          height={300}
-          attempts={displayAttempts}
-          maxAttempts={maxAttempts}
-          detailX="50%"
-          detailY="30%"
-        />
-      ) : (
-        <div
-          style={{
-            width: 400,
-            height: 300,
-            background: '#eee',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            color: '#666',
-          }}
-        >
-          Loading...
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        {isDisplayReady && displaySrc ? (
+          <ZoomableImage
+            src={displaySrc}
+            srcSet={displaySrcSet}
+            width={400}
+            height={300}
+            attempts={displayAttempts}
+            maxAttempts={maxAttempts}
+            detailX="50%"
+            detailY="30%"
+          />
+        ) : (
+          <div className="w-[400px] h-[300px] flex items-center justify-center text-gray-500 text-xs tracking-wide">
+            Loading…
+          </div>
+        )}
+      </div>
+
+      {finished && (
+        <div className="mt-4 w-[320px] border border-gray-200 rounded-xl px-4 py-3 text-left text-xs text-gray-600">
+          <p>
+            Answer: {art.artist} – {art.title}
+          </p>
+          <p className="mt-1 text-gray-500">{art.year} • {museumClue || 'Unknown location'}</p>
         </div>
       )}
 
       {!finished && (
-        <div className="flex flex-col items-center mt-4">
+        <div className="flex flex-col items-center mt-6 space-y-3 w-[320px]">
           <label htmlFor="guess-input" className="sr-only">
             Guess the painter
           </label>
@@ -694,7 +721,7 @@ export default function Home() {
               }
             }}
             placeholder={placeholderText}
-            className="border px-3 py-2 rounded w-80 mb-2"
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm tracking-tight bg-white"
           />
           <datalist id="artist-suggestions">
             {artistSuggestions.map((name) => (
@@ -704,84 +731,37 @@ export default function Home() {
           <button
             type="button"
             onClick={() => void handleSubmit()}
-            className="px-4 py-2 bg-blue-600 text-white rounded"
+            className="w-full border border-gray-900 text-gray-900 rounded px-3 py-2 text-sm tracking-tight hover:bg-gray-100 transition-colors"
           >
             Submit
           </button>
-          <p className="mt-2 text-gray-600">
-            Attempts: {attemptsHistory.length} / {maxAttempts}
-          </p>
-          <p className="text-xs text-gray-500 mt-1 text-center">
-            Tip: this artwork can be seen in {museumClue || 'an unknown location'}
+          <div className="text-[11px] text-gray-500 text-center space-y-1">
+            <p>
+              Attempts {attemptsHistory.length} / {maxAttempts}
+            </p>
+            <p>Clue: This artwork can be seen in {museumClue || 'Unknown location'}</p>
             {attemptsHistory.length >= 3 && (
-              <>
-                <br />
-                This artwork was made in {art.year}.
-              </>
+              <p>It was painted in {art.year}</p>
             )}
-          </p>
+          </div>
         </div>
       )}
 
-      {attemptsHistory.length > 0 && (
-        <div className="mt-4 w-80">
-          {attemptsHistory.map((entry, idx) => (
-            <div
-              key={`${entry.guess}-${idx}`}
-              className="mb-3 p-3 border rounded-lg bg-white shadow-sm"
-            >
-              <p className="text-sm font-medium flex items-center justify-between">
-                Attempt {idx + 1}:{' '}
-                <strong className="break-words">{entry.guess}</strong>
-                <span>{entry.correct ? '✅' : '❌'}</span>
-              </p>
-              {Array.isArray(entry.feedback) ? (
-                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                  {entry.feedback.map((detail, detailIdx) => (
-                    <div
-                      key={`${detail.label}-${detailIdx}`}
-                      className={`rounded-md border px-2 py-1 flex flex-col gap-0.5 ${
-                        FEEDBACK_STYLES[detail.status] ||
-                        'border-slate-200 bg-slate-50 text-slate-800'
-                      }`}
-                    >
-                      <span className="uppercase tracking-wide text-[10px] text-gray-500">
-                        {detail.label}
-                      </span>
-                      <span className="font-semibold text-sm">
-                        {detail.value}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : entry.feedback ? (
-                <pre className="mt-1 text-xs text-gray-600 whitespace-pre-wrap">
-                  {entry.feedback as unknown as string}
-                </pre>
-              ) : null}
-            </div>
-          ))}
+      {playStats && (
+        <div className="mt-4 w-[320px] text-[11px] text-gray-500 text-center space-y-1">
+          <p>Total plays {playStats.total}</p>
+          <p>Wins {playStats.wins}</p>
         </div>
       )}
+
+      {!finished && renderAttempts()}
 
       {finished && (
-        <div className="mt-6 text-center max-w-lg">
-          <div
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium ${
-              success
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                : 'border-amber-200 bg-amber-50 text-amber-800'
-            }`}
-          >
-            {success ? 'Nice work! Think you can do even better tomorrow?' : 'Almost there! Try again tomorrow with a new artist!'}
+        <div className="mt-6 text-center max-w-lg space-y-4">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 text-xs tracking-wide uppercase text-gray-600">
+            {success ? 'Success, come back tomorrow' : 'Better luck tomorrow'}
           </div>
           <div className="mt-4 w-full space-y-3 text-left">
-            {!success && (
-            <p className="text-gray-700 mt-3">
-              The painter was <strong>{art.artist}</strong>, author of{' '}
-              <em>{art.title}</em>.
-            </p>
-            )}
             {infoParagraphs.map((paragraph, idx) => (
               <p
                 key={`${paragraph}-${idx}`}
@@ -802,17 +782,7 @@ export default function Home() {
               </a>.
             </p>
           </div>
-          <div className="mt-4 flex flex-col items-center gap-2">
-            <button
-              onClick={handleShare}
-              className="px-4 py-2 bg-indigo-600 text-white rounded"
-            >
-              Share result
-            </button>
-            {shareMessage && (
-              <p className="text-sm text-gray-600">{shareMessage}</p>
-            )}
-          </div>
+          {renderAttempts('mt-6 w-[320px] mx-auto space-y-2.5 text-left')}
         </div>
       )}
     </div>

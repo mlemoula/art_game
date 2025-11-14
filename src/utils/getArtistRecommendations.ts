@@ -24,7 +24,7 @@ export async function getArtistRecommendations(
     const { data: correctRows } = await supabase
       .from('artists')
       .select(ARTIST_COLUMNS)
-      .eq('name', correctArtistName)
+      .ilike('name', correctArtistName)
       .limit(1)
 
     const { data: others } = await supabase
