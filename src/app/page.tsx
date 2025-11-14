@@ -1,5 +1,6 @@
 'use client'
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { Analytics } from '@vercel/analytics/next'
 import ZoomableImage from '@/components/ZoomableImage'
 import { getWikimediaUrls } from '@/utils/getWikimediaUrls'
 import {
@@ -1065,6 +1066,7 @@ export default function Home() {
           {renderAttempts('mt-6 w-[320px] mx-auto space-y-2.5 text-left')}
         </div>
       )}
+      <Analytics />
     </div>
   )
 }
