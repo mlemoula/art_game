@@ -655,7 +655,7 @@ export default function Home() {
 
   const placeholderText = 'Who painted this?'
   const frameOuterClass = finished
-    ? 'w-full max-w-[420px] rounded-2xl border border-gray-300 bg-gray-50 p-3 shadow-sm transition-all duration-300'
+    ? 'w-full sm:w-auto max-w-[420px] rounded-2xl border border-gray-300 bg-gray-50 p-3 shadow-sm transition-all duration-300 mx-auto'
     : 'w-full max-w-[420px] rounded-xl border border-gray-200 bg-white transition-all duration-300'
   const frameInnerClass = finished
     ? 'overflow-hidden rounded-xl border border-gray-100 bg-white'
@@ -698,6 +698,7 @@ export default function Home() {
               detailX="50%"
               detailY="30%"
               fit={finished ? 'contain' : 'cover'}
+              lockWidthToImage={finished}
             />
           ) : (
             <div className="w-full aspect-[4/3] flex items-center justify-center text-gray-500 text-xs tracking-wide bg-gray-50">

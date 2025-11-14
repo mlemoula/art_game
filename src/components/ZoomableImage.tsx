@@ -13,6 +13,7 @@ interface Props {
   detailX?: string
   detailY?: string
   fit?: 'cover' | 'contain'
+  lockWidthToImage?: boolean
 }
 
 export default function ZoomableImage({
@@ -26,6 +27,7 @@ export default function ZoomableImage({
   detailX = '50%',
   detailY = '50%',
   fit = 'cover',
+  lockWidthToImage = false,
 }: Props) {
   // Zoom : 0 essais -> zoom max (5x), maxAttempts -> 1x
   const safeMaxAttempts = Math.max(maxAttempts, 1)
@@ -64,11 +66,20 @@ export default function ZoomableImage({
     }
   }
 
+  const targetWidth = (() => {
+    if (!lockWidthToImage) return maxContainerWidth
+    const widthFromHeight = containerRatio * maxContainerHeight
+    if (!Number.isFinite(widthFromHeight) || widthFromHeight <= 0) {
+      return maxContainerWidth
+    }
+    return Math.min(maxContainerWidth, widthFromHeight)
+  })()
+
   return (
     <div
       style={{
-        width: '100%',
-        maxWidth: maxContainerWidth,
+        width: lockWidthToImage ? `${targetWidth}px` : '100%',
+        maxWidth: lockWidthToImage ? `${targetWidth}px` : '100%',
         maxHeight: maxContainerHeight,
         aspectRatio: containerRatio,
         overflow: 'hidden',
@@ -76,6 +87,7 @@ export default function ZoomableImage({
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: '#eee',
+        margin: '0 auto',
       }}
     >
       <motion.img

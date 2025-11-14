@@ -125,7 +125,7 @@ function fillFromMeta(artwork) {
 
 function isValidArtwork(artwork, artistSet, artistName) {
   const issues = []
-  if (!artwork.image_url?.startsWith('http')) issues.push('image_url')
+  if (!artwork.image_url?.startsWith('https')) issues.push('image_url')
   if (!artwork.title) issues.push('title')
   if (!artistSet.has(normalizeName(artistName))) issues.push('artist missing in catalog')
   if (!artwork.year) issues.push('year')
