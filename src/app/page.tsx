@@ -18,6 +18,7 @@ const normalizeString = (str: string) =>
 
 const FALLBACK_ARTISTS: ArtistRecommendation[] = []
 const PROGRESS_KEY_PREFIX = 'art-progress-'
+const DAY_MS = 24 * 60 * 60 * 1000
 
 const mergeArtistData = (
   ...lists: Array<ArtistRecommendation[] | undefined>
@@ -32,6 +33,19 @@ const mergeArtistData = (
   }
   lists.forEach((list) => list?.forEach(addEntry))
   return Array.from(map.values())
+}
+
+const extractDayKey = (iso: string | null | undefined) => {
+  if (!iso) return ''
+  return iso.slice(0, 10)
+}
+
+const diffDays = (fromDay: string, toDay: string) => {
+  if (!fromDay || !toDay) return Number.NaN
+  const fromTime = Date.parse(`${fromDay}T00:00:00Z`)
+  const toTime = Date.parse(`${toDay}T00:00:00Z`)
+  if (Number.isNaN(fromTime) || Number.isNaN(toTime)) return Number.NaN
+  return Math.round((toTime - fromTime) / DAY_MS)
 }
 
 interface DailyArt {
@@ -56,6 +70,20 @@ interface Attempt {
   guess: string
   correct: boolean
   feedback: FeedbackDetail[]
+}
+
+interface CommunityStats {
+  total: number
+  successRate: number
+  fastRate: number
+}
+
+interface UserStats {
+  total: number
+  wins: number
+  currentStreak: number
+  bestStreak: number
+  fastestWin: number | null
 }
 
 const FEEDBACK_TONES: Record<FeedbackStatus, string> = {
@@ -138,7 +166,8 @@ export default function Home() {
     useState<ArtistRecommendation[]>(FALLBACK_ARTISTS)
   const [userToken, setUserToken] = useState('')
   const [playSaved, setPlaySaved] = useState(false)
-  const [playStats, setPlayStats] = useState<{ total: number; wins: number } | null>(null)
+  const [playStats, setPlayStats] = useState<UserStats | null>(null)
+  const [communityStats, setCommunityStats] = useState<CommunityStats | null>(null)
   const [wikiIntro, setWikiIntro] = useState<string[]>([])
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
   const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
@@ -271,13 +300,76 @@ export default function Home() {
       try {
         const { data } = await supabase
           .from('plays')
-          .select('success')
+          .select('success, attempts, created_at')
           .eq('user_token', userToken)
+          .order('created_at', { ascending: false })
 
         if (!cancelled && data) {
           const total = data.length
           const wins = data.filter((row) => row.success).length
-          setPlayStats({ total, wins })
+          const byDay = new Map<string, { success: boolean; attempts?: number | null }>()
+          data.forEach((row) => {
+            const key = extractDayKey(row.created_at)
+            if (!key) return
+            if (!byDay.has(key)) {
+              byDay.set(key, { success: row.success, attempts: row.attempts })
+            }
+          })
+          const orderedDays = Array.from(byDay.entries()).sort((a, b) =>
+            a[0].localeCompare(b[0])
+          )
+          let bestStreak = 0
+          let rolling = 0
+          let previousDay: string | null = null
+          orderedDays.forEach(([day, info]) => {
+            if (!info.success) {
+              rolling = 0
+              previousDay = null
+              return
+            }
+            if (!previousDay) {
+              rolling = 1
+            } else {
+              const gap = diffDays(previousDay, day)
+              rolling = gap === 1 ? rolling + 1 : 1
+            }
+            previousDay = day
+            if (rolling > bestStreak) bestStreak = rolling
+          })
+          let currentStreak = 0
+          let expectedDay: string | null = null
+          for (let i = orderedDays.length - 1; i >= 0; i -= 1) {
+            const [day, info] = orderedDays[i]
+            if (!info.success) break
+            if (!expectedDay) {
+              currentStreak = 1
+              expectedDay = day
+              continue
+            }
+            const gap = diffDays(day, expectedDay)
+            if (gap === 1) {
+              currentStreak += 1
+              expectedDay = day
+            } else {
+              break
+            }
+          }
+          const fastestWin = data
+            .filter((row) => row.success && typeof row.attempts === 'number')
+            .reduce<number | null>(
+              (best, row) =>
+                best === null
+                  ? (row.attempts ?? null)
+                  : Math.min(best, row.attempts ?? best),
+              null
+            )
+          setPlayStats({
+            total,
+            wins,
+            currentStreak,
+            bestStreak,
+            fastestWin,
+          })
         }
       } catch {
         if (!cancelled) setPlayStats(null)
@@ -592,6 +684,47 @@ export default function Home() {
     }
   }
 
+  useEffect(() => {
+    if (!finished || !artId) {
+      setCommunityStats(null)
+      return
+    }
+    let cancelled = false
+    const fetchCommunityStats = async () => {
+      try {
+        const { data, count } = await supabase
+          .from('plays')
+          .select('attempts, success', { count: 'exact' })
+          .eq('daily_id', artId)
+        if (!cancelled && data) {
+          const total = count ?? data.length
+          if (!total) {
+            setCommunityStats(null)
+            return
+          }
+          const successCount = data.filter((row) => row.success).length
+          const fastWins = data.filter(
+            (row) => row.success && typeof row.attempts === 'number' && (row.attempts ?? 0) <= 3
+          ).length
+          const successRate = Math.round((successCount / total) * 100)
+          const fastRate = Math.round((fastWins / total) * 100)
+          setCommunityStats({
+            total,
+            successRate,
+            fastRate,
+          })
+        }
+      } catch {
+        if (!cancelled) setCommunityStats(null)
+      }
+    }
+    fetchCommunityStats()
+    return () => {
+      cancelled = true
+    }
+  }, [finished, artId])
+
+
   // Sauvegarde locale de la progression du jour
   useEffect(() => {
     if (!artId || typeof window === 'undefined') return
@@ -629,48 +762,48 @@ export default function Home() {
 
   const normalize = normalizeString
 
-  const renderAttempts = (containerClass = 'mt-6 w-80 space-y-2.5') => {
+  const renderAttempts = (containerClass = 'mt-6 w-full max-w-[360px]') => {
     if (!attemptsHistory.length) return null
     const reversed = [...attemptsHistory].reverse()
     return (
-      <div className={containerClass}>
-        {reversed.map((entry, idx) => {
-          const attemptNumber = attemptsHistory.length - idx
-          return (
-            <div
-              key={`${entry.guess}-${idx}`}
-              className="p-3 border border-gray-100 rounded-xl bg-white/80 shadow-sm"
-            >
-              <div className="text-xs flex items-center justify-between text-slate-600 mb-1">
-                <span className="truncate">
-                  Attempt {attemptNumber}: {entry.guess}
-                </span>
-                <span>{entry.correct ? '✓' : '–'}</span>
-              </div>
-              {Array.isArray(entry.feedback) ? (
-                <ul className="text-[11px] space-y-1 text-gray-600">
-                  {entry.feedback.map((detail, detailIdx) => (
-                    <li
-                      key={`${detail.label}-${detailIdx}`}
-                      className="flex items-center justify-between border-b border-gray-100 pb-1.5 last:border-b-0"
-                    >
-                      <span className="text-slate-500">{detail.label}</span>
-                      <span
-                        className={`font-normal ${FEEDBACK_TONES[detail.status] || 'text-slate-700'}`}
-                      >
-                        {detail.value}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : entry.feedback ? (
-                <pre className="mt-1 text-[11px] text-gray-600 whitespace-pre-wrap">
-                  {entry.feedback as unknown as string}
-                </pre>
-              ) : null}
-            </div>
-          )
-        })}
+      <div className={`${containerClass} border border-gray-100 rounded-2xl bg-white/80 shadow-sm p-4`}>
+        <div className="text-xs uppercase tracking-wide text-gray-500 mb-3 flex justify-between">
+          <span>Attempts</span>
+          <span className="font-mono text-[11px] text-gray-800">
+            {shareGlyphs}
+          </span>
+        </div>
+        <ul className="space-y-3">
+          {reversed.map((entry, idx) => {
+            const attemptNumber = attemptsHistory.length - idx
+            return (
+              <li key={`${entry.guess}-${idx}`} className="border-b border-gray-100 pb-2 last:border-b-0 last:pb-0">
+                <div className="flex items-center justify-between text-xs text-slate-600">
+                  <span className="truncate">
+                    #{attemptNumber} {entry.guess}
+                  </span>
+                  <span>{entry.correct ? '✓' : '–'}</span>
+                </div>
+                {Array.isArray(entry.feedback) ? (
+                  <div className="mt-1 text-[11px] text-gray-600 space-y-1">
+                    {entry.feedback.map((detail, detailIdx) => (
+                      <div key={`${detail.label}-${detailIdx}`} className="flex justify-between">
+                        <span className="text-slate-500">{detail.label}</span>
+                        <span className={`${FEEDBACK_TONES[detail.status] || 'text-slate-700'}`}>
+                          {detail.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : entry.feedback ? (
+                  <pre className="mt-1 text-[11px] text-gray-600 whitespace-pre-wrap">
+                    {entry.feedback as unknown as string}
+                  </pre>
+                ) : null}
+              </li>
+            )
+          })}
+        </ul>
       </div>
     )
   }
@@ -835,6 +968,10 @@ export default function Home() {
       ? 'Great eye — see you tomorrow.'
       : 'New masterpiece tomorrow, stay sharp.'
     : ''
+  const streakBadge =
+    playStats?.currentStreak && playStats.currentStreak >= 2
+      ? `${playStats.currentStreak}-day streak`
+      : null
   const frameOuterClass = finished
     ? 'w-full sm:w-auto max-w-[420px] rounded-2xl border border-gray-300 bg-gray-50 p-3 shadow-sm transition-all duration-300 mx-auto'
     : 'w-full max-w-[420px] rounded-xl border border-gray-200 bg-white transition-all duration-300'
@@ -1002,21 +1139,46 @@ export default function Home() {
             Submit
           </button>
           <div className="text-[11px] text-gray-500 text-center space-y-1">
-            <p>
-              Attempts {attemptsHistory.length} / {maxAttempts}
-            </p>
-            <p>Clue: This artwork can be seen in {museumClue || 'Unknown location'}</p>
+            <p className="font-mono text-sm text-gray-800">{shareGlyphs}</p>
+            {attemptsHistory.length >= 1 && (
+              <p>
+                ✦ Clue: try to think about {museumClue || 'unknown venues'}
+              </p>
+            )}
             {attemptsHistory.length >= 3 && (
-              <p>It was painted in {art.year}</p>
+              <p>✦ Painted in {art.year}</p>
             )}
           </div>
         </div>
       )}
 
       {playStats && (
-        <div className="mt-4 w-[320px] text-[11px] text-gray-500 text-center space-y-1">
-          <p>Total plays {playStats.total}</p>
-          <p>Wins {playStats.wins}</p>
+        <div className="mt-5 w-full max-w-[360px] text-[10px] text-gray-500">
+          <p className="uppercase tracking-wide text-[9px] text-gray-400 mb-1">Your stats</p>
+          <div className="flex justify-between">
+            <span>Total plays</span>
+            <span className="text-gray-800">{playStats.total}</span>
+          </div>
+          <div className="flex justify-between mt-1">
+            <span>Wins</span>
+            <span className="text-gray-800">{playStats.wins}</span>
+          </div>
+          <div className="flex justify-between mt-1">
+            <span>Current streak</span>
+            <span className="text-gray-800">{playStats.currentStreak}</span>
+          </div>
+          <div className="flex justify-between mt-1">
+            <span>Best streak</span>
+            <span className="text-gray-800">{playStats.bestStreak}</span>
+          </div>
+          {typeof playStats.fastestWin === 'number' && (
+            <div className="flex justify-between mt-1">
+              <span>Fastest solve</span>
+              <span className="text-gray-800">
+                {playStats.fastestWin} attempt{playStats.fastestWin === 1 ? '' : 's'}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -1024,12 +1186,14 @@ export default function Home() {
 
       {finished && (
         <div className="mt-6 text-center max-w-lg space-y-4">
-          <div className="w-full max-w-[320px] mx-auto border border-gray-200 rounded-2xl p-4 text-left space-y-2 bg-white shadow-sm">
+          <div className="w-full max-w-[360px] mx-auto border border-gray-200 rounded-2xl p-4 text-left space-y-2 bg-white shadow-sm">
             <p className="text-[11px] uppercase tracking-wide text-gray-500">
-              Today&apos;s score
+              Today&apos;s score · <span className="text-gray-900">{outcomeLabel}</span>{' '}
+              <span className="text-gray-500">— {outcomeSubline}</span>
             </p>
-            <p className="text-sm text-gray-900">{outcomeLabel}</p>
-            <p className="text-[11px] text-gray-500">{outcomeSubline}</p>
+            {streakBadge && (
+              <p className="text-[10px] text-emerald-600 uppercase tracking-wide">{streakBadge}</p>
+            )}
             <p className="font-mono text-lg tracking-wider text-gray-800">{shareGlyphs}</p>
             <button
               type="button"
@@ -1040,6 +1204,14 @@ export default function Home() {
             </button>
             {shareMessage && (
               <p className="text-[10px] text-gray-500">{shareMessage}</p>
+            )}
+            {communityStats && (
+              <div className="mt-2 border-t border-gray-100 pt-2 text-[11px] text-gray-600 space-y-1">
+                <p>
+                  {communityStats.total} plays • {communityStats.successRate}% solved
+                </p>
+                <p>{communityStats.fastRate}% cracked within 3 tries</p>
+              </div>
             )}
           </div>
           <div className="mt-4 w-full space-y-3 text-left">
@@ -1063,7 +1235,7 @@ export default function Home() {
               </a>.
             </p>
           </div>
-          {renderAttempts('mt-6 w-[320px] mx-auto space-y-2.5 text-left')}
+          {renderAttempts('mt-6 w-full max-w-[360px] mx-auto')}
         </div>
       )}
       <p className="mt-8 text-[10px] text-gray-400 tracking-wide uppercase text-center">
