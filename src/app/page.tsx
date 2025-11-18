@@ -965,7 +965,7 @@ export default function Home() {
   const outcomeLabel = finished ? (success ? 'Victory' : 'Not this time') : ''
   const outcomeSubline = finished
     ? success
-      ? 'Great eye — see you tomorrow.'
+      ? 'Great eye - see you tomorrow.'
       : 'New masterpiece tomorrow, stay sharp.'
     : ''
   const streakBadge =
@@ -1139,7 +1139,9 @@ export default function Home() {
             Submit
           </button>
           <div className="text-[11px] text-gray-500 text-center space-y-1">
-            <p className="font-mono text-sm text-gray-800">{shareGlyphs}</p>
+            <p className="font-mono text-sm text-gray-800 text-center tracking-wide">
+              {shareGlyphs}
+            </p>
             {attemptsHistory.length >= 1 && (
               <p>
                 ✦ Clue: try to think about {museumClue || 'unknown venues'}
@@ -1188,7 +1190,7 @@ export default function Home() {
         <div className="mt-6 text-center max-w-lg space-y-4">
           <div className="w-full max-w-[360px] mx-auto border border-gray-200 rounded-2xl p-4 text-left space-y-2 bg-white shadow-sm">
             <p className="text-[11px] uppercase tracking-wide text-gray-500">
-              Today&apos;s score · <span className="text-gray-900">{outcomeLabel}</span>{' '}
+              <span className="text-gray-900">{outcomeLabel}</span>{' '}
               <span className="text-gray-500">— {outcomeSubline}</span>
             </p>
             {streakBadge && (
