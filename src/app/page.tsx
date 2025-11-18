@@ -649,9 +649,14 @@ export default function Home() {
     const urlHint =
       process.env.NEXT_PUBLIC_APP_URL ||
       (typeof window !== 'undefined' ? window.location.origin : '')
-    const parts = [grid, 'Can you beat me?']
-    if (urlHint) parts.push(urlHint)
-    return parts.join('\n')
+    const pitchLines = [
+      '4rtW0rk — one art puzzle a day',
+      'Test your culture, discover painters, no ads.',
+      'Tap to play & beat my score:',
+      grid,
+    ]
+    if (urlHint) pitchLines.push(urlHint)
+    return pitchLines.join('\n')
   }
 
   const handleShare = async () => {
@@ -965,7 +970,7 @@ export default function Home() {
   const outcomeLabel = finished ? (success ? 'Victory' : 'Not this time') : ''
   const outcomeSubline = finished
     ? success
-      ? 'Great eye - see you tomorrow.'
+      ? 'Great eye, see you tomorrow.'
       : 'New masterpiece tomorrow, stay sharp.'
     : ''
   const streakBadge =
