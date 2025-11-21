@@ -14,6 +14,8 @@ const ARTIST_API_ENABLED =
   typeof process !== 'undefined' &&
   process.env.NEXT_PUBLIC_ENABLE_SUPABASE_ARTISTS === 'true'
 
+const makePattern = (value: string) => `%${value.trim()}%`
+
 export async function getArtistRecommendations(
   correctArtistName: string,
   limit = 5
@@ -24,7 +26,7 @@ export async function getArtistRecommendations(
     const { data: correctRows } = await supabase
       .from('artists')
       .select(ARTIST_COLUMNS)
-      .ilike('name', correctArtistName)
+      .ilike('name', makePattern(correctArtistName))
       .limit(1)
 
     const { data: others } = await supabase
@@ -64,7 +66,7 @@ export async function getArtistProfile(
     const { data } = await supabase
       .from('artists')
       .select(ARTIST_COLUMNS)
-      .ilike('name', name)
+      .ilike('name', makePattern(name))
       .limit(1)
     return data?.[0] ?? null
   } catch {
