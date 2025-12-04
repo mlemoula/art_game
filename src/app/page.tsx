@@ -171,6 +171,7 @@ export default function Home() {
   const [wikiIntro, setWikiIntro] = useState<string[]>([])
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
   const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
+  const [showHelp, setShowHelp] = useState(false)
   const maxAttempts = 5
   const inputRef = useRef<HTMLInputElement | null>(null)
   const blurTimeoutRef = useRef<number | null>(null)
@@ -249,6 +250,8 @@ export default function Home() {
       window.localStorage.setItem('art_game_user_token', token)
     }
     setUserToken(token)
+    const helpSeen = window.localStorage.getItem('art_game_help_seen')
+    if (!helpSeen) setShowHelp(true)
   }, [])
 
   useEffect(() => {
@@ -689,6 +692,13 @@ export default function Home() {
     }
   }
 
+  const dismissHelp = (persist = true) => {
+    setShowHelp(false)
+    if (persist && typeof window !== 'undefined') {
+      window.localStorage.setItem('art_game_help_seen', '1')
+    }
+  }
+
   useEffect(() => {
     if (!finished || !artId) {
       setCommunityStats(null)
@@ -1005,7 +1015,17 @@ export default function Home() {
           animation: confetti-fall 1.2s ease-out forwards;
         }
       `}</style>
-      <h1 className="text-xl font-normal mb-6 tracking-tight uppercase">4rtW0rk</h1>
+      <div className="relative w-full max-w-[420px] flex justify-center mb-6">
+        <h1 className="text-xl font-normal tracking-tight uppercase">4rtW0rk</h1>
+      </div>
+      <button
+        type="button"
+        aria-label="How to play"
+        onClick={() => setShowHelp(true)}
+        className="absolute top-4 right-4 text-xs border border-gray-300 rounded-full px-2 py-1 text-gray-600 hover:bg-gray-100"
+      >
+        ?
+      </button>
 
       {/* Affiche placeholder jusqu'à ce que l'image jouable soit prête */}
       <div className={frameOuterClass}>
@@ -1245,8 +1265,33 @@ export default function Home() {
           {renderAttempts('mt-6 w-full max-w-[360px] mx-auto')}
         </div>
       )}
+      {showHelp && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-6">
+          <div className="max-w-sm w-full bg-white border border-gray-200 rounded-2xl p-5 text-sm text-gray-700 space-y-3 shadow-2xl">
+            <p className="text-xs uppercase tracking-wide text-gray-500">How it works</p>
+            <p>
+              Guess the painter in up to five attempts. Each wrong guess zooms out to reveal more of the
+              artwork.
+            </p>
+            <ul className="text-xs text-gray-600 space-y-1 list-disc list-inside">
+              <li>Start from a tight detail—type an artist&apos;s name.</li>
+              <li>Hints appear as you miss: venue clues, era cues, movement &amp; country comparisons.</li>
+              <li>The image gracefully de-zooms until the full painting is unveiled.</li>
+            </ul>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="text-xs px-3 py-1 rounded-full border border-gray-900 text-gray-900"
+                onClick={() => dismissHelp(true)}
+              >
+                Let&apos;s play
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <p className="mt-8 text-[10px] text-gray-400 tracking-wide uppercase text-center">
-        Crafted with care -{' '}
+        Crafted with care —{' '}
         <a
           href="https://www.linkedin.com/in/martin-lemoulant/"
           target="_blank"

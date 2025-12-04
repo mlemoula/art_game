@@ -28,55 +28,135 @@ const wikidataAPI = (query) =>
     query
   )}`
 
+const wikidataCache = new Map()
+
 const normalizeName = (name = '') => name.trim().toLowerCase()
 
 // Transform Wikimedia file URL to full-res
 function toFullImage(url) {
   if (!url) return null
-  return url.replace('/thumb/', '/').replace(/\/\d+px-.+$/, '')
+  const cleaned = url.replace('/thumb/', '/').replace(/\/\d+px-.+$/, '')
+  return cleaned.replace(/^http:\/\//i, 'https://')
 }
 
 // -------------------------------
 // Wikidata Query Builder
 // -------------------------------
 
-function buildWikidataQuery(artistLabel, limit = 10) {
-  return `
-SELECT ?item ?itemLabel ?creatorLabel ?image ?inception ?museumLabel ?article WHERE {
-  ?item wdt:P31 wd:Q3305213.     # is a painting
-  ?item wdt:P170 ?creator.       # creator
-  ?creator rdfs:label "${artistLabel}"@en.
+function buildWikidataQuery(artist, limit = 10) {
+  const safeName = artist.name.replace(/"/g, '\\"')
+  const usesWikidataId = Boolean(artist.wikidata_id)
 
-  OPTIONAL { ?item wdt:P18 ?image. }
+  const creatorClause = usesWikidataId
+    ? `  ?item wdt:P170 wd:${artist.wikidata_id}.`
+    : `  ?item wdt:P170 ?creator.
+  ?creator rdfs:label ?creatorLabel.
+  FILTER (
+    LCASE(STR(?creatorLabel)) = LCASE("${safeName}")
+    && (LANG(?creatorLabel) = "en" || LANG(?creatorLabel) = "fr")
+  )`
+
+  return `
+SELECT ?item ?itemLabel ?image ?inception ?museumLabel ?article WHERE {
+  ?item wdt:P31 wd:Q3305213.
+${creatorClause}
+
+  ?item wdt:P18 ?image.
   OPTIONAL { ?item wdt:P571 ?inception. }
   OPTIONAL {
     ?item wdt:P195 ?museum.
-    ?museum rdfs:label ?museumLabel FILTER (lang(?museumLabel) = "en").
+    ?museum rdfs:label ?museumLabel FILTER (lang(?museumLabel) = "en" || lang(?museumLabel) = "fr").
   }
-  OPTIONAL {
-    ?article schema:about ?item ;
-             schema:inLanguage "en";
-             schema:isPartOf <https://en.wikipedia.org/>.
-  }
+  ?article schema:about ?item ;
+           schema:inLanguage "en";
+           schema:isPartOf <https://en.wikipedia.org/>.
 
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,fr". }
 }
 LIMIT ${limit}
 `
 }
 
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+async function fetchWikidataIdForName(name) {
+  const normalized = name.trim().toLowerCase()
+  if (wikidataCache.has(normalized)) return wikidataCache.get(normalized)
+
+  const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&language=en&format=json&limit=1&search=${encodeURIComponent(
+    name
+  )}`
+  const response = await fetch(searchUrl, {
+    headers: { 'User-Agent': 'Daily-Art-Generator/1.0' },
+  })
+  if (!response.ok) {
+    wikidataCache.set(normalized, null)
+    return null
+  }
+  const json = await response.json()
+  const bestMatch = json?.search?.[0] || null
+  const id = bestMatch?.id || null
+  if (id) {
+    const label =
+      bestMatch.display?.label ||
+      bestMatch.label ||
+      bestMatch.match?.text ||
+      name
+    const description =
+      bestMatch.display?.description || bestMatch.description || ''
+    console.log(
+      `   Wikidata lookup → ${label} (${id})${
+        description ? ` – ${description}` : ''
+      }`
+    )
+  } else {
+    console.warn(`   Wikidata lookup failed for "${name}"`)
+  }
+  wikidataCache.set(normalized, id)
+  return id
+}
+
 // -------------------------------
-// Load Artists from CSV
+// Load Artists from Supabase (fallback to CSV)
 // -------------------------------
 
-function loadArtists() {
+async function loadArtists() {
+  if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+    const restUrl = `${SUPABASE_URL}/rest/v1/artists?select=name,popularity_score&order=name.asc`
+    const response = await fetch(restUrl, {
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    })
+    if (!response.ok) {
+      const body = await response.text()
+      throw new Error(`Failed to load artists from Supabase: ${response.status} – ${body}`)
+    }
+    const rawEntries = await response.json()
+    const normalized = rawEntries.map((entry) => ({
+      name: entry.name,
+      fame_index: Number(entry.popularity_score ?? 0),
+      wikidata_id: entry.wikidata_id || null,
+    }))
+    const artistSet = new Set(normalized.map((a) => normalizeName(a.name)))
+    return { entries: normalized, artistSet }
+  }
+
   const raw = fs.readFileSync(ARTISTS_CSV, 'utf8')
   const entries = parse(raw, {
     columns: true,
     skip_empty_lines: true,
   })
-  const artistSet = new Set(entries.map((a) => normalizeName(a.name)))
-  return { entries, artistSet }
+  const normalizedEntries = entries.map((entry) => ({
+    ...entry,
+    name: entry.name,
+    fame_index: Number(entry.fame_index || entry.popularity_score || 0),
+    wikidata_id: entry.wikidata_id || null,
+  }))
+  const artistSet = new Set(normalizedEntries.map((a) => normalizeName(a.name)))
+  return { entries: normalizedEntries, artistSet }
 }
 
 // -------------------------------
@@ -84,7 +164,7 @@ function loadArtists() {
 // -------------------------------
 
 async function fetchArtworks(artist) {
-  const query = buildWikidataQuery(artist.name, 15)
+  const query = buildWikidataQuery(artist, 15)
 
   await wait(200) // rate limit safe for WDQS
 
@@ -123,15 +203,17 @@ function fillFromMeta(artwork) {
   return artwork
 }
 
+function hasHttpUrl(value) {
+  return typeof value === 'string' && /^https?:\/\//i.test(value.trim())
+}
+
 function isValidArtwork(artwork, artistSet, artistName) {
   const issues = []
-  if (!artwork.image_url?.startsWith('https')) issues.push('image_url')
+  if (!hasHttpUrl(artwork.image_url)) issues.push('image_url')
   if (!artwork.title) issues.push('title')
-  if (!artistSet.has(normalizeName(artistName))) issues.push('artist missing in catalog')
-  if (!artwork.year) issues.push('year')
-  if (!artwork.museum) issues.push('museum')
-  if (!artwork.meta_json) issues.push('meta_json')
-  if (!artwork.wiki_summary_url) issues.push('wiki_summary_url')
+  if (!artistSet.has(normalizeName(artistName)))
+    issues.push('artist missing in catalog')
+  if (!hasHttpUrl(artwork.wiki_summary_url)) issues.push('wiki_summary_url')
   return { ok: issues.length === 0, issues }
 }
 
@@ -156,15 +238,23 @@ function pickArtwork(artist, artworks) {
 // -------------------------------
 
 async function generate() {
-  const { entries: artists, artistSet } = loadArtists()
+  const { entries: artists, artistSet } = await loadArtists()
+  console.log(`Loaded ${artists.length} artists from catalog`)
 
   const result = []
-  let idx = 1
-
   for (const artist of artists) {
     if (result.length >= TARGET_COUNT) break
 
+    console.log(`→ Fetching artworks for ${artist.name}`)
+    if (!artist.wikidata_id) {
+      artist.wikidata_id = await fetchWikidataIdForName(artist.name)
+      if (!artist.wikidata_id) {
+        console.warn(`   No Wikidata ID found for ${artist.name}, skipping.`)
+        continue
+      }
+    }
     const artworksRaw = await fetchArtworks(artist)
+    console.log(`   Found ${artworksRaw.length} raw artworks for ${artist.name}`)
 
     const artworks = artworksRaw
       .map((art) => fillFromMeta({ ...art }))
@@ -173,11 +263,13 @@ async function generate() {
         const { ok, issues } = isValidArtwork(art, artistSet, artist.name)
         if (!ok) {
           console.warn(
-            `Skipping artwork for ${artist.name}: ${issues.join(', ')}`
+            `   Skipping artwork for ${artist.name}: ${issues.join(', ')}`
           )
         }
         return ok
       })
+
+    console.log(`   ${artworks.length} artworks remain after validation for ${artist.name}`)
 
     if (!artworks.length) continue
 
@@ -185,16 +277,19 @@ async function generate() {
     if (!chosen) continue
 
     result.push({
-      id: idx++,
-      date: "", // you fill date later when scheduling daily items
       image_url: chosen.image_url,
       title: chosen.title,
       artist: artist.name,
-      year: chosen.year,
-      museum: chosen.museum,
+      year: chosen.year || '',
+      museum: chosen.museum || '',
       wiki_summary_url: chosen.wiki_summary_url,
       meta_json: chosen.meta_json,
     })
+  }
+
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[result[i], result[j]] = [result[j], result[i]]
   }
 
   const csv = stringify(result, {
