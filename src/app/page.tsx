@@ -176,11 +176,36 @@ export default function Home() {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const blurTimeoutRef = useRef<number | null>(null)
 
-  // Récupérer l'art du jour
+  // Récupérer l'art du jour (ou date spécifique via query param)
   useEffect(() => {
-    fetch('/api/today')
-      .then(res => res.json())
-      .then(data => setArt(data))
+    const controller = new AbortController()
+    const loadArt = async () => {
+      try {
+        let query = ''
+        if (typeof window !== 'undefined') {
+          const currentParams = new URLSearchParams(window.location.search)
+          const forwardParams = new URLSearchParams()
+          const offset = currentParams.get('offset')
+          const date = currentParams.get('date')
+          if (offset) forwardParams.set('offset', offset)
+          if (date) forwardParams.set('date', date)
+          const built = forwardParams.toString()
+          query = built ? `?${built}` : ''
+        }
+        const response = await fetch(`/api/today${query}`, {
+          signal: controller.signal,
+        })
+        if (!response.ok) throw new Error('Failed to load artwork')
+        const payload = await response.json()
+        setArt(payload)
+      } catch (error) {
+        if ((error as Error)?.name === 'AbortError') return
+        console.error('Unable to load artwork', error)
+        setArt(null)
+      }
+    }
+    loadArt()
+    return () => controller.abort()
   }, [])
 
   const mediaUrls = art
@@ -189,6 +214,11 @@ export default function Home() {
   const { thumb, medium, hd } = mediaUrls
   const baseSrc = thumb || medium || hd || ''
   const attemptsCount = attemptsHistory.length
+  const revealProgress = Math.min(
+    1,
+    (attemptsCount + (finished ? 1 : 0)) / maxAttempts
+  )
+  const showFullImage = finished
   const artId = art?.id ?? null
 
   // Reset gameplay quand nouvelle oeuvre arrive et restaurer progression locale
@@ -1041,8 +1071,9 @@ export default function Home() {
               maxAttempts={maxAttempts}
               detailX="50%"
               detailY="30%"
-              fit={finished ? 'contain' : 'cover'}
-              lockWidthToImage={finished}
+              fit={showFullImage ? 'contain' : 'cover'}
+              lockWidthToImage={finished || showFullImage}
+              revealProgress={revealProgress}
             />
           ) : (
             <div className="w-full aspect-[4/3] flex items-center justify-center text-gray-500 text-xs tracking-wide bg-gray-50">

@@ -29,8 +29,11 @@ const wikidataAPI = (query) =>
   )}`
 
 const wikidataCache = new Map()
+const imageProbeCache = new Map()
 
 const normalizeName = (name = '') => name.trim().toLowerCase()
+const normalizeImageKey = (url = '') =>
+  url.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')
 
 // Transform Wikimedia file URL to full-res
 function toFullImage(url) {
@@ -159,6 +162,36 @@ async function loadArtists() {
   return { entries: normalizedEntries, artistSet }
 }
 
+const buildArtworkKey = (payload) => {
+  if (!payload) return null
+  const imageKey = normalizeImageKey(payload.image_url || '')
+  if (imageKey) return `img::${imageKey}`
+  const artist = normalizeName(payload.artist || '')
+  const title = normalizeName(payload.title || '')
+  if (artist && title) return `pair::${artist}::${title}`
+  return null
+}
+
+function loadExistingArtworkKeys() {
+  if (!fs.existsSync(OUTPUT_CSV)) return new Set()
+  try {
+    const raw = fs.readFileSync(OUTPUT_CSV, 'utf8')
+    if (!raw.trim()) return new Set()
+    const rows = parse(raw, {
+      columns: true,
+      skip_empty_lines: true,
+    })
+    const keys = new Set()
+    rows.forEach((row) => {
+      const key = buildArtworkKey(row)
+      if (key) keys.add(key)
+    })
+    return keys
+  } catch {
+    return new Set()
+  }
+}
+
 // -------------------------------
 // Fetch Artworks for an Artist
 // -------------------------------
@@ -217,6 +250,33 @@ function isValidArtwork(artwork, artistSet, artistName) {
   return { ok: issues.length === 0, issues }
 }
 
+async function imageExists(url) {
+  if (!url) return false
+  if (imageProbeCache.has(url)) return imageProbeCache.get(url)
+
+  const probe = async (method, extraHeaders = {}) => {
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'User-Agent': 'Daily-Art-Generator/1.0',
+          ...extraHeaders,
+        },
+      })
+      return response.ok
+    } catch {
+      return false
+    }
+  }
+
+  let ok = await probe('HEAD')
+  if (!ok) {
+    ok = await probe('GET', { Range: 'bytes=0-0' })
+  }
+  imageProbeCache.set(url, ok)
+  return ok
+}
+
 // -------------------------------
 // Selection Logic Based on Fame
 // -------------------------------
@@ -239,7 +299,14 @@ function pickArtwork(artist, artworks) {
 
 async function generate() {
   const { entries: artists, artistSet } = await loadArtists()
+  const existingArtworkKeys = loadExistingArtworkKeys()
+  const usedArtworkKeys = new Set(existingArtworkKeys)
   console.log(`Loaded ${artists.length} artists from catalog`)
+  if (existingArtworkKeys.size) {
+    console.log(
+      `Skipping ${existingArtworkKeys.size} artworks already present in ${OUTPUT_CSV}`
+    )
+  }
 
   const result = []
   for (const artist of artists) {
@@ -276,7 +343,15 @@ async function generate() {
     const chosen = pickArtwork(artist, artworks)
     if (!chosen) continue
 
-    result.push({
+    const exists = await imageExists(chosen.image_url)
+    if (!exists) {
+      console.warn(
+        `   Skipping artwork for ${artist.name}: image unreachable (${chosen.image_url})`
+      )
+      continue
+    }
+
+    const candidate = {
       image_url: chosen.image_url,
       title: chosen.title,
       artist: artist.name,
@@ -284,7 +359,18 @@ async function generate() {
       museum: chosen.museum || '',
       wiki_summary_url: chosen.wiki_summary_url,
       meta_json: chosen.meta_json,
-    })
+    }
+
+    const uniquenessKey = buildArtworkKey(candidate)
+    if (uniquenessKey && usedArtworkKeys.has(uniquenessKey)) {
+      console.warn(
+        `   Skipping artwork for ${artist.name}: already scheduled elsewhere`
+      )
+      continue
+    }
+    if (uniquenessKey) usedArtworkKeys.add(uniquenessKey)
+
+    result.push(candidate)
   }
 
   for (let i = result.length - 1; i > 0; i--) {

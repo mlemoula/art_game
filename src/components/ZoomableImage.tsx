@@ -14,6 +14,7 @@ interface Props {
   detailY?: string
   fit?: 'cover' | 'contain'
   lockWidthToImage?: boolean
+  revealProgress?: number
 }
 
 export default function ZoomableImage({
@@ -28,11 +29,23 @@ export default function ZoomableImage({
   detailY = '50%',
   fit = 'cover',
   lockWidthToImage = false,
+  revealProgress = 0,
 }: Props) {
-  // Zoom : 0 essais -> zoom max (5x), maxAttempts -> 1x
+  // Zoom : 0 essais -> zoom max (≈4.6x), maxAttempts -> 1x
   const safeMaxAttempts = Math.max(maxAttempts, 1)
   const clampedAttempts = Math.min(Math.max(attempts, 0), safeMaxAttempts)
-  const zoom = 5 - (clampedAttempts / safeMaxAttempts) * 4
+  const revealClamped = Math.min(Math.max(revealProgress, 0), 1)
+  const revealBoost = revealClamped * (safeMaxAttempts * 0.6)
+  const stage = Math.min(
+    safeMaxAttempts,
+    clampedAttempts + revealBoost
+  )
+  const normalized = stage / safeMaxAttempts
+  const eased = Math.pow(1 - normalized, 0.6)
+  const maxZoom = 4.8
+  const minZoom = 1
+  const targetZoom = minZoom + eased * (maxZoom - minZoom)
+  const zoom = fit === 'contain' ? 1 : targetZoom
   const baseRatio = width / height || 1
   const [naturalRatio, setNaturalRatio] = useState<number | null>(null)
   const [maxContainerWidth, setMaxContainerWidth] = useState<number>(() => {
@@ -41,14 +54,14 @@ export default function ZoomableImage({
   })
   const [maxContainerHeight, setMaxContainerHeight] = useState<number>(() => {
     if (typeof window === 'undefined') return height
-    return Math.min(height, Math.round(window.innerHeight * 0.7))
+    return Math.max(320, Math.round(window.innerHeight * 0.75))
   })
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const computeSize = () => {
       setMaxContainerWidth(Math.min(width, window.innerWidth - 32))
-      setMaxContainerHeight(Math.min(height, Math.round(window.innerHeight * 0.7)))
+      setMaxContainerHeight(Math.max(320, Math.round(window.innerHeight * 0.75)))
     }
     computeSize()
     window.addEventListener('resize', computeSize)
@@ -64,22 +77,43 @@ export default function ZoomableImage({
 
   const containerRatio = naturalRatio || baseRatio
 
-  const targetWidth = (() => {
-    if (!lockWidthToImage) return maxContainerWidth
-    const widthFromHeight = containerRatio * maxContainerHeight
-    if (!Number.isFinite(widthFromHeight) || widthFromHeight <= 0) {
-      return maxContainerWidth
+  const computeWrapperSize = () => {
+    let widthBound = maxContainerWidth
+    let heightBound =
+      widthBound / (containerRatio || 1)
+
+    if (heightBound > maxContainerHeight) {
+      heightBound = maxContainerHeight
+      widthBound = heightBound * (containerRatio || 1)
     }
-    return Math.min(maxContainerWidth, widthFromHeight)
-  })()
+
+    if (!Number.isFinite(widthBound) || widthBound <= 0) {
+      widthBound = maxContainerWidth
+    }
+    if (!Number.isFinite(heightBound) || heightBound <= 0) {
+      heightBound = maxContainerHeight
+    }
+
+    return {
+      width: widthBound,
+      height: heightBound,
+    }
+  }
+
+  const { width: wrapperWidth, height: wrapperHeight } = computeWrapperSize()
+  const widthStyle = lockWidthToImage ? `${Math.round(wrapperWidth)}px` : '100%'
+  const maxWidthStyle = `${Math.round(wrapperWidth)}px`
+  const heightStyle = lockWidthToImage ? `${Math.round(wrapperHeight)}px` : 'auto'
+  const maxHeightStyle = `${Math.round(wrapperHeight)}px`
 
   return (
     <div
       onContextMenu={(event) => event.preventDefault()}
       style={{
-        width: lockWidthToImage ? `${targetWidth}px` : '100%',
-        maxWidth: lockWidthToImage ? `${targetWidth}px` : '100%',
-        maxHeight: maxContainerHeight,
+        width: widthStyle,
+        maxWidth: maxWidthStyle,
+        height: heightStyle,
+        maxHeight: maxHeightStyle,
         aspectRatio: containerRatio,
         overflow: 'hidden',
         display: 'flex',
