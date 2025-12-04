@@ -944,6 +944,27 @@ export default function Home() {
       compareField('Movement', artistMeta?.movement, guessedArtistData?.movement)
       compareField('Country', artistMeta?.country, guessedArtistData?.country)
 
+      const guessPopularity = guessedArtistData?.popularity_score ?? null
+      const targetPopularity = artistMeta?.popularity_score ?? null
+      if (guessPopularity !== null && targetPopularity !== null) {
+        const delta = guessPopularity - targetPopularity
+        let popularityHint = ''
+        let tone: FeedbackStatus = 'info'
+        if (Math.abs(delta) <= 3) {
+          popularityHint = 'Similar fame'
+          tone = 'match'
+        } else if (delta > 3) {
+          popularityHint = 'Try a more famous artist'
+          tone = 'different'
+        } else {
+          popularityHint = 'Artist of the day is less famous'
+          tone = 'different'
+        }
+        pushDetail('Fame hint', popularityHint, tone)
+      } else {
+        pushDetail('Fame hint', '—', 'missing')
+      }
+
       if (!guessedArtistData) {
         pushDetail('Data', 'No reference yet for this artist.', 'info')
       }
@@ -1200,11 +1221,16 @@ export default function Home() {
             </p>
             {attemptsHistory.length >= 1 && (
               <p>
-                ✦ Clue: try to think about {museumClue || 'unknown venues'}
+                ✦ Clue: This artwork can be seen in {museumClue || 'unknown venues'}
               </p>
             )}
             {attemptsHistory.length >= 3 && (
               <p>✦ Painted in {art.year}</p>
+            )}
+            {attemptsHistory.length >= maxAttempts - 1 && (
+              <p>
+                ✦ Movement: {artistMeta?.movement || 'not documented'}
+              </p>
             )}
           </div>
         </div>
