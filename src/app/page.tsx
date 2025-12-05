@@ -950,14 +950,15 @@ export default function Home() {
         const delta = guessPopularity - targetPopularity
         let popularityHint = ''
         let tone: FeedbackStatus = 'info'
-        if (Math.abs(delta) <= 3) {
+        const threshold = 7
+        if (Math.abs(delta) <= threshold) {
           popularityHint = 'Similar fame'
           tone = 'match'
-        } else if (delta > 3) {
-          popularityHint = 'Try a more famous artist'
+        } else if (delta > threshold) {
+          popularityHint = 'Artist of the day is less famous'
           tone = 'different'
         } else {
-          popularityHint = 'Artist of the day is less famous'
+          popularityHint = 'Try a more famous artist'
           tone = 'different'
         }
         pushDetail('Fame hint', popularityHint, tone)
