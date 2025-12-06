@@ -151,6 +151,7 @@ const updatePopularityScores = async () => {
   const { data: artists, error } = await supabase
     .from('artists')
     .select('id, name')
+    .is('popularity_score', null)
 
   if (error) throw error
 
