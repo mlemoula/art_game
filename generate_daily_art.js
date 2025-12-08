@@ -16,6 +16,7 @@ const TARGET_COUNT = 200
 
 // Fame threshold for “very known artists”
 const FAME_THRESHOLD = 92
+const ENFORCE_EXISTING_DEDUP = true
 
 // -------------------------------
 // Utils
@@ -60,7 +61,7 @@ function buildWikidataQuery(artist, limit = 10) {
   )`
 
   return `
-SELECT ?item ?itemLabel ?image ?inception ?museumLabel ?article WHERE {
+SELECT ?item ?itemLabel ?image ?inception ?museumLabel ?article ?sitelinks WHERE {
   ?item wdt:P31 wd:Q3305213.
 ${creatorClause}
 
@@ -70,12 +71,15 @@ ${creatorClause}
     ?item wdt:P195 ?museum.
     ?museum rdfs:label ?museumLabel FILTER (lang(?museumLabel) = "en" || lang(?museumLabel) = "fr").
   }
+  OPTIONAL { ?item wikibase:sitelinks ?sitelinksRaw. }
+  BIND(IF(BOUND(?sitelinksRaw), ?sitelinksRaw, 0) AS ?sitelinks)
   ?article schema:about ?item ;
            schema:inLanguage "en";
            schema:isPartOf <https://en.wikipedia.org/>.
 
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en,fr". }
 }
+ORDER BY DESC(?sitelinks)
 LIMIT ${limit}
 `
 }
@@ -210,14 +214,17 @@ async function fetchArtworks(artist) {
   const json = await res.json()
   const rows = json?.results?.bindings ?? []
 
-  return rows.map((r) => ({
-    title: r.itemLabel?.value || null,
-    image_url: toFullImage(r.image?.value || null),
-    year: r.inception?.value ? r.inception.value.substring(0, 4) : null,
-    museum: r.museumLabel?.value || null,
-    wiki_summary_url: r.article?.value || null,
-    meta_json: JSON.stringify(r),
-  }))
+  return rows
+    .map((r) => ({
+      title: r.itemLabel?.value || null,
+      image_url: toFullImage(r.image?.value || null),
+      year: r.inception?.value ? r.inception.value.substring(0, 4) : null,
+      museum: r.museumLabel?.value || null,
+      wiki_summary_url: r.article?.value || null,
+      meta_json: JSON.stringify(r),
+      sitelinks: Number(r.sitelinks?.value || 0),
+    }))
+    .sort((a, b) => (b.sitelinks || 0) - (a.sitelinks || 0))
 }
 
 function fillFromMeta(artwork) {
@@ -299,10 +306,12 @@ function pickArtwork(artist, artworks) {
 
 async function generate() {
   const { entries: artists, artistSet } = await loadArtists()
-  const existingArtworkKeys = loadExistingArtworkKeys()
+  const existingArtworkKeys = ENFORCE_EXISTING_DEDUP
+    ? loadExistingArtworkKeys()
+    : new Set()
   const usedArtworkKeys = new Set(existingArtworkKeys)
   console.log(`Loaded ${artists.length} artists from catalog`)
-  if (existingArtworkKeys.size) {
+  if (ENFORCE_EXISTING_DEDUP && existingArtworkKeys.size) {
     console.log(
       `Skipping ${existingArtworkKeys.size} artworks already present in ${OUTPUT_CSV}`
     )
@@ -362,7 +371,7 @@ async function generate() {
     }
 
     const uniquenessKey = buildArtworkKey(candidate)
-    if (uniquenessKey && usedArtworkKeys.has(uniquenessKey)) {
+    if (ENFORCE_EXISTING_DEDUP && uniquenessKey && usedArtworkKeys.has(uniquenessKey)) {
       console.warn(
         `   Skipping artwork for ${artist.name}: already scheduled elsewhere`
       )
