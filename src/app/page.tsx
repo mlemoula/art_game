@@ -1295,19 +1295,16 @@ export default function Home() {
   const outcomeLabel = finished ? (success ? 'Congrats !' : 'Not this time') : ''
   const outcomeSubline = finished
     ? success
-      ? 'See you tomorrow.'
-      : 'Better luck tomorrow.'
+      ? 'See you tomorrow'
+      : 'Better luck tomorrow'
     : ''
   const streakBadge =
     playStats?.currentStreak && playStats.currentStreak >= 2
       ? `${playStats.currentStreak}-day streak`
       : null
   const frameOuterClass = finished
-    ? 'frame-outer w-full sm:w-auto max-w-[420px] rounded-[32px] border border-slate-200 bg-slate-50/90 p-3 shadow-sm transition-all duration-300 mx-auto'
-    : 'frame-outer w-full max-w-[420px] rounded-[28px] border border-slate-200 bg-white transition-all duration-300'
-  const frameInnerClass = finished
-    ? 'overflow-hidden rounded-[26px] border border-white bg-white'
-    : 'overflow-hidden rounded-2xl bg-white'
+    ? 'frame-outer w-full sm:w-auto max-w-[420px] rounded-[32px] border border-slate-200 shadow-sm transition-all duration-300 mx-auto overflow-hidden'
+    : 'frame-outer w-full max-w-[420px] rounded-[28px] border border-slate-200 transition-all duration-300 overflow-hidden'
 
   return (
     <div
@@ -1381,12 +1378,18 @@ export default function Home() {
           border-color: rgba(59, 130, 246, 0.3);
         }
         .frame-outer {
-          background-color: rgba(255, 255, 255, 0.95);
+          background-color: transparent;
           border-color: rgba(148, 163, 184, 0.35);
+          box-shadow:
+            inset 0 0 0 1px rgba(148, 163, 184, 0.45),
+            0 30px 70px rgba(15, 23, 42, 0.08);
         }
         [data-theme='dark'] .frame-outer {
-          background-color: rgba(2, 6, 23, 0.98);
-          border-color: rgba(59, 130, 246, 0.2);
+          background-color: transparent;
+          border-color: rgba(59, 130, 246, 0.25);
+          box-shadow:
+            inset 0 0 0 1px rgba(59, 130, 246, 0.3),
+            0 30px 70px rgba(2, 6, 23, 0.65);
         }
         .button-hover {
           transition: background-color 0.2s ease;
@@ -1396,6 +1399,22 @@ export default function Home() {
         }
         [data-theme='dark'] .button-hover:hover {
           background-color: rgba(255, 255, 255, 0.08);
+        }
+        .primary-share-button {
+          border-color: #0f172a;
+          color: #0f172a;
+          background-color: rgba(255, 255, 255, 0.92);
+        }
+        .primary-share-button:hover {
+          background-color: rgba(15, 23, 42, 0.08);
+        }
+        [data-theme='dark'] .primary-share-button {
+          border-color: #f8fafc;
+          color: #f8fafc;
+          background-color: rgba(15, 23, 42, 0.6);
+        }
+        [data-theme='dark'] .primary-share-button:hover {
+          background-color: rgba(248, 250, 252, 0.08);
         }
         [data-theme='dark'] {
           background-color: #020617;
@@ -1468,6 +1487,12 @@ export default function Home() {
         [data-theme='dark'] .answer-meta {
           color: #94a3b8;
         }
+        .answer-hint {
+          color: #94a3b8;
+        }
+        [data-theme='dark'] .answer-hint {
+          color: #cbd5f5;
+        }
       `}</style>
       <div className="w-full max-w-[420px] relative flex items-center justify-center gap-2 mb-6">
         <h1 className="text-xl font-normal tracking-tight uppercase">4rtW0rk</h1>
@@ -1496,28 +1521,26 @@ export default function Home() {
 
       {/* Affiche placeholder jusqu'à ce que l'image jouable soit prête */}
       <div className={frameOuterClass}>
-        <div className={frameInnerClass}>
-          {isDisplayReady && displaySrc ? (
-            <ZoomableImage
-              key={displaySrc}
-              src={displaySrc}
-              srcSet={displaySrcSet}
-              width={400}
-              height={300}
-              attempts={displayAttempts}
-              maxAttempts={maxAttempts}
-              detailX="50%"
-              detailY="30%"
-              fit={showFullImage ? 'contain' : 'cover'}
-              lockWidthToImage={finished || showFullImage}
-              revealProgress={revealProgress}
-            />
-          ) : (
-            <div className="w-full aspect-[4/3] flex items-center justify-center text-gray-500 text-xs tracking-wide bg-gray-50">
-              Loading…
-            </div>
-          )}
-        </div>
+        {isDisplayReady && displaySrc ? (
+          <ZoomableImage
+            key={displaySrc}
+            src={displaySrc}
+            srcSet={displaySrcSet}
+            width={400}
+            height={300}
+            attempts={displayAttempts}
+            maxAttempts={maxAttempts}
+            detailX="50%"
+            detailY="30%"
+            fit={showFullImage ? 'contain' : 'cover'}
+            lockWidthToImage={finished || showFullImage}
+            revealProgress={revealProgress}
+          />
+        ) : (
+          <div className="w-full aspect-[4/3] flex items-center justify-center text-gray-500 text-xs tracking-wide bg-gray-50">
+            Loading…
+          </div>
+        )}
       </div>
 
       {finished && (
@@ -1530,6 +1553,7 @@ export default function Home() {
             <p className="mt-2 text-[11px] answer-meta">
               {art.year} • {museumClue || 'Unknown location'}
             </p>
+            <p className="text-xs answer-hint">More on the artist & artwork just below.</p>
           </div>
         </div>
       )}
@@ -1716,7 +1740,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => void handleShare()}
-              className="w-full border border-gray-900 text-gray-900 rounded-full px-4 py-2 text-xs tracking-[0.25em] button-hover"
+              className="w-full border border-gray-900 text-gray-900 rounded-full px-4 py-2 text-xs tracking-[0.25em] button-hover primary-share-button"
             >
               Share result
             </button>
