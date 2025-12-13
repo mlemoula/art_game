@@ -195,6 +195,7 @@ export default function Home() {
   const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
   const [guessError, setGuessError] = useState<string | null>(null)
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [gaveUp, setGaveUp] = useState(false)
   const [attemptsOpen, setAttemptsOpen] = useState(false)
   const maxAttempts = 5
@@ -829,6 +830,14 @@ export default function Home() {
     }
   }
 
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('art_game_theme', next)
+    }
+  }
+
   const dismissHelp = (persist = true) => {
     setShowHelp(false)
     if (persist && typeof window !== 'undefined') {
@@ -906,6 +915,25 @@ export default function Home() {
     setGaveUp(false)
   }, [artId])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const stored = window.localStorage.getItem('art_game_theme')
+    if (stored === 'dark' || stored === 'light') {
+      setTheme(stored)
+    } else if (typeof window.matchMedia === 'function') {
+      const media = window.matchMedia('(prefers-color-scheme: dark)')
+      setTheme(media.matches ? 'dark' : 'light')
+      const listener = (event: MediaQueryListEvent) => {
+        if (window.localStorage.getItem('art_game_theme')) return
+        setTheme(event.matches ? 'dark' : 'light')
+      }
+      media.addEventListener('change', listener)
+      return () => {
+        media.removeEventListener('change', listener)
+      }
+    }
+  }, [])
+
   const normalize = normalizeString
   const usedGuessSet = useMemo(() => {
     const set = new Set<string>()
@@ -965,8 +993,10 @@ export default function Home() {
       <div
         className={
           variant === 'card'
-            ? `${containerClass} border border-gray-100 rounded-2xl bg-white/80 shadow-sm p-4`
-            : containerClass || undefined
+            ? `${containerClass} border border-gray-100 rounded-2xl bg-white/80 shadow-sm p-4 attempt-card`
+            : containerClass
+            ? `${containerClass} attempt-card`
+            : 'attempt-card'
         }
       >
         <div className={headerClasses}>
@@ -1238,14 +1268,17 @@ export default function Home() {
       ? `${playStats.currentStreak}-day streak`
       : null
   const frameOuterClass = finished
-    ? 'w-full sm:w-auto max-w-[420px] rounded-[32px] border border-slate-200 bg-slate-50/90 p-3 shadow-sm transition-all duration-300 mx-auto'
-    : 'w-full max-w-[420px] rounded-[28px] border border-slate-200 bg-white transition-all duration-300'
+    ? 'frame-outer w-full sm:w-auto max-w-[420px] rounded-[32px] border border-slate-200 bg-slate-50/90 p-3 shadow-sm transition-all duration-300 mx-auto'
+    : 'frame-outer w-full max-w-[420px] rounded-[28px] border border-slate-200 bg-white transition-all duration-300'
   const frameInnerClass = finished
     ? 'overflow-hidden rounded-[26px] border border-white bg-white'
     : 'overflow-hidden rounded-2xl bg-white'
 
   return (
-    <div className="flex flex-col items-center px-4 sm:px-6 py-4 min-h-screen bg-white text-gray-900 font-mono">
+    <div
+      className="flex flex-col items-center px-4 sm:px-6 py-4 min-h-screen bg-white text-gray-900 font-mono"
+      data-theme={theme}
+    >
       <style jsx global>{`
         @keyframes confetti-fall {
           0% {
@@ -1264,17 +1297,123 @@ export default function Home() {
         .animate-fall {
           animation: confetti-fall 1.2s ease-out forwards;
         }
+        .stats-card {
+          background-color: rgba(255, 255, 255, 0.95);
+          border-color: rgba(148, 163, 184, 0.7);
+        }
+        [data-theme='dark'] .stats-card {
+          background-color: rgba(15, 23, 42, 0.85);
+          border-color: rgba(148, 163, 184, 0.5);
+        }
+        .stats-panel {
+          background-color: rgba(248, 250, 252, 0.7);
+        }
+        [data-theme='dark'] .stats-panel {
+          background-color: rgba(15, 23, 42, 0.7);
+        }
+        .attempt-card {
+          background-color: rgba(255, 255, 255, 0.92);
+        }
+        [data-theme='dark'] .attempt-card {
+          background-color: rgba(15, 23, 42, 0.85);
+        }
+        .hover-bg-secondary:hover {
+          background-color: rgba(248, 250, 252, 0.75);
+        }
+        [data-theme='dark'] .hover-bg-secondary:hover {
+          background-color: rgba(255, 255, 255, 0.08) !important;
+        }
+        .result-card {
+          background-color: rgba(255, 255, 255, 0.95);
+          border-color: rgba(148, 163, 184, 0.6);
+        }
+        [data-theme='dark'] .result-card {
+          background-color: rgba(15, 23, 42, 0.85);
+          border-color: rgba(59, 130, 246, 0.3);
+        }
+        .frame-outer {
+          background-color: rgba(255, 255, 255, 0.95);
+          border-color: rgba(148, 163, 184, 0.5);
+        }
+        [data-theme='dark'] .frame-outer {
+          background-color: rgba(2, 6, 23, 0.95);
+          border-color: rgba(59, 130, 246, 0.3);
+        }
+        .button-hover {
+          transition: background-color 0.2s ease;
+        }
+        .button-hover:hover {
+          background-color: rgba(15, 23, 42, 0.05);
+        }
+        [data-theme='dark'] .button-hover:hover {
+          background-color: rgba(255, 255, 255, 0.08);
+        }
+        [data-theme='dark'] {
+          background-color: #020617;
+          color: #e2e8f0;
+        }
+        [data-theme='dark'] .bg-white {
+          background-color: #020617 !important;
+        }
+        [data-theme='dark'] .bg-white\\/80 {
+          background-color: rgba(15, 23, 42, 0.8) !important;
+        }
+        [data-theme='dark'] .bg-white\\/90 {
+          background-color: rgba(15, 23, 42, 0.9) !important;
+        }
+        [data-theme='dark'] .from-slate-50 {
+          --tw-gradient-from: #0f172a !important;
+        }
+        [data-theme='dark'] .to-white {
+          --tw-gradient-to: #020617 !important;
+        }
+        [data-theme='dark'] .bg-gray-50,
+        [data-theme='dark'] .bg-gray-50\\/70 {
+          background-color: #0f172a !important;
+        }
+        [data-theme='dark'] .bg-gray-100 {
+          background-color: #111827 !important;
+        }
+        [data-theme='dark'] .bg-slate-50,
+        [data-theme='dark'] .bg-slate-50\\/60 {
+          background-color: #0f172a !important;
+        }
+        [data-theme='dark'] .border-gray-200,
+        [data-theme='dark'] .border-slate-200,
+        [data-theme='dark'] .border-gray-100 {
+          border-color: #1f2937 !important;
+        }
+        [data-theme='dark'] .text-gray-900,
+        [data-theme='dark'] .text-gray-800,
+        [data-theme='dark'] .text-slate-900,
+        [data-theme='dark'] .text-slate-800 {
+          color: #f8fafc !important;
+        }
+        [data-theme='dark'] .text-gray-500,
+        [data-theme='dark'] .text-slate-500 {
+          color: #94a3b8 !important;
+        }
       `}</style>
-      <div className="w-full max-w-[420px] relative flex items-center justify-center mb-6">
+      <div className="w-full max-w-[420px] relative flex items-center justify-center gap-2 mb-6">
         <h1 className="text-xl font-normal tracking-tight uppercase">4rtW0rk</h1>
-        <button
-          type="button"
-          aria-label="How to play"
-          onClick={() => setShowHelp(true)}
-          className="absolute right-0 text-xs border border-gray-300 rounded-full px-2 py-1 text-gray-600 hover:bg-gray-100 transition-colors"
-        >
-          ?
-        </button>
+        <div className="absolute right-0 flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="How to play"
+            onClick={() => setShowHelp(true)}
+            className="text-xs border border-gray-300 rounded-full px-2 py-1 text-gray-600 button-hover"
+          >
+            ?
+          </button>
+          <button
+            type="button"
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            onClick={toggleTheme}
+            className="text-xs border border-gray-300 rounded-full px-2 py-1 text-gray-600 button-hover"
+          >
+            {theme === 'dark' ? '🌞' : '🌑'}
+          </button>
+        </div>
         <p className="sr-only">
           Guess the painter in up to five attempts. Each wrong guess gracefully zooms out the artwork to reveal more clues.
         </p>
@@ -1308,13 +1447,15 @@ export default function Home() {
 
       {finished && (
         <div className="mt-4 w-[320px] text-center text-xs text-gray-600">
-          <p>
-            Answer: {art.title}
-          </p>
-          <p>
-            by {art.artist}
-          </p>
-          <p className="mt-1 text-gray-500">{art.year} • {museumClue || 'Unknown location'}</p>
+          <div className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 result-card">
+            <p className="text-sm tracking-tight text-gray-900 dark:text-slate-50">
+              Answer: {art.title}
+            </p>
+            <p className="text-sm font-light text-slate-700 dark:text-white/90">by {art.artist}</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              {art.year} • {museumClue || 'Unknown location'}
+            </p>
+          </div>
         </div>
       )}
 
@@ -1420,7 +1561,7 @@ export default function Home() {
               setSuggestionsOpen(false)
               void handleSubmit()
             }}
-            className="w-full border border-gray-900 text-gray-900 rounded px-3 py-2 text-sm tracking-tight hover:bg-gray-100 transition-colors"
+            className="w-full border border-gray-900 text-gray-900 rounded px-3 py-2 text-sm tracking-tight button-hover"
           >
             Submit
           </button>
@@ -1453,7 +1594,7 @@ export default function Home() {
       )}
 
       {playStats && !finished && (
-        <div className="mt-5 w-full max-w-[360px] rounded-2xl border border-gray-100 bg-white/80 p-4 text-[11px] text-gray-600">
+        <div className="mt-5 w-full max-w-[360px] rounded-2xl border border-gray-100 bg-white/80 p-4 text-[11px] text-gray-600 stats-card">
           <p className="uppercase tracking-[0.25em] text-[9px] text-gray-400 mb-2">Your stats</p>
           <dl className="space-y-1">
             <div className="flex justify-between">
@@ -1500,14 +1641,14 @@ export default function Home() {
             <button
               type="button"
               onClick={() => void handleShare()}
-              className="w-full border border-gray-900 text-gray-900 rounded-full px-4 py-2 text-xs tracking-[0.25em] hover:bg-gray-100 transition-colors"
+              className="w-full border border-gray-900 text-gray-900 rounded-full px-4 py-2 text-xs tracking-[0.25em] button-hover"
             >
               Share result
             </button>
             {shareMessage && <p className="text-[10px] text-gray-500">{shareMessage}</p>}
             <div className="pt-3 border-t border-gray-100 space-y-3">
               {playStats ? (
-                <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3">
+                <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3 stats-panel">
                   <p className="text-[10px] uppercase tracking-[0.35em] text-gray-400">Your stats</p>
                   <dl className="mt-2 space-y-1 text-[11px] text-gray-600">
                     <div className="flex justify-between">
@@ -1538,7 +1679,7 @@ export default function Home() {
                 </div>
               ) : null}
               {communityStats ? (
-                <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3">
+                <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3 stats-panel">
                   <p className="text-[10px] uppercase tracking-[0.35em] text-gray-400">Community stats</p>
                   <p className="mt-2 text-sm text-gray-900">
                     {communityStats.total === 1

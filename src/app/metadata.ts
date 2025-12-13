@@ -1,7 +1,9 @@
+import type { Metadata } from 'next'
+
 const DEFAULT_META_DESCRIPTION =
   'Guess the painter in five attempts while the artwork gracefully zooms out. No ads, just culture.'
 
-export const metadata = {
+export const metadata: Metadata = {
   title: '4rtW0rk — daily art puzzle',
   description: DEFAULT_META_DESCRIPTION,
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://4rtw0rk.com'),
