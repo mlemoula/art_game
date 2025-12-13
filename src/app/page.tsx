@@ -1303,8 +1303,11 @@ export default function Home() {
       ? `${playStats.currentStreak}-day streak`
       : null
   const frameOuterClass = finished
-    ? 'frame-outer w-full sm:w-auto max-w-[420px] rounded-[32px] border border-slate-200 shadow-sm transition-all duration-300 mx-auto overflow-hidden'
-    : 'frame-outer w-full max-w-[420px] rounded-[28px] border border-slate-200 transition-all duration-300 overflow-hidden'
+    ? 'frame-outer w-full sm:w-auto max-w-[420px] rounded-[32px] border border-slate-200 shadow-sm transition-all duration-300 mx-auto overflow-hidden p-3 sm:p-4'
+    : 'frame-outer w-full max-w-[420px] rounded-[28px] border border-slate-200 transition-all duration-300 overflow-hidden p-2'
+  const frameInnerClass = finished
+    ? 'frame-inner w-full h-full overflow-hidden rounded-[26px]'
+    : 'frame-inner w-full h-full overflow-hidden rounded-2xl'
 
   return (
     <div
@@ -1383,6 +1386,7 @@ export default function Home() {
           box-shadow:
             inset 0 0 0 1px rgba(148, 163, 184, 0.45),
             0 30px 70px rgba(15, 23, 42, 0.08);
+          position: relative;
         }
         [data-theme='dark'] .frame-outer {
           background-color: transparent;
@@ -1390,6 +1394,14 @@ export default function Home() {
           box-shadow:
             inset 0 0 0 1px rgba(59, 130, 246, 0.3),
             0 30px 70px rgba(2, 6, 23, 0.65);
+        }
+        .frame-inner {
+          width: 100%;
+          height: 100%;
+          background-color: rgba(255, 255, 255, 0.97);
+        }
+        [data-theme='dark'] .frame-inner {
+          background-color: rgba(2, 6, 23, 0.94);
         }
         .button-hover {
           transition: background-color 0.2s ease;
@@ -1521,26 +1533,28 @@ export default function Home() {
 
       {/* Affiche placeholder jusqu'à ce que l'image jouable soit prête */}
       <div className={frameOuterClass}>
-        {isDisplayReady && displaySrc ? (
-          <ZoomableImage
-            key={displaySrc}
-            src={displaySrc}
-            srcSet={displaySrcSet}
-            width={400}
-            height={300}
-            attempts={displayAttempts}
-            maxAttempts={maxAttempts}
-            detailX="50%"
-            detailY="30%"
-            fit={showFullImage ? 'contain' : 'cover'}
-            lockWidthToImage={finished || showFullImage}
-            revealProgress={revealProgress}
-          />
-        ) : (
-          <div className="w-full aspect-[4/3] flex items-center justify-center text-gray-500 text-xs tracking-wide bg-gray-50">
-            Loading…
-          </div>
-        )}
+        <div className={frameInnerClass}>
+          {isDisplayReady && displaySrc ? (
+            <ZoomableImage
+              key={displaySrc}
+              src={displaySrc}
+              srcSet={displaySrcSet}
+              width={400}
+              height={300}
+              attempts={displayAttempts}
+              maxAttempts={maxAttempts}
+              detailX="50%"
+              detailY="30%"
+              fit={showFullImage ? 'contain' : 'cover'}
+              lockWidthToImage={finished || showFullImage}
+              revealProgress={revealProgress}
+            />
+          ) : (
+            <div className="w-full aspect-[4/3] flex items-center justify-center text-gray-500 text-xs tracking-wide bg-gray-50">
+              Loading…
+            </div>
+          )}
+        </div>
       </div>
 
       {finished && (
@@ -1553,7 +1567,6 @@ export default function Home() {
             <p className="mt-2 text-[11px] answer-meta">
               {art.year} • {museumClue || 'Unknown location'}
             </p>
-            <p className="text-xs answer-hint">More on the artist & artwork just below.</p>
           </div>
         </div>
       )}
