@@ -1249,9 +1249,12 @@ export default function Home() {
       </div>
 
       {finished && (
-        <div className="mt-4 w-[320px] text-left text-xs text-gray-600">
+        <div className="mt-4 w-[320px] text-center text-xs text-gray-600">
           <p>
-            Answer: {art.artist} – {art.title}
+            Answer: {art.title}
+          </p>
+          <p>
+            by {art.artist}
           </p>
           <p className="mt-1 text-gray-500">{art.year} • {museumClue || 'Unknown location'}</p>
         </div>
