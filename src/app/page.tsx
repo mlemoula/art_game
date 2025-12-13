@@ -1683,7 +1683,7 @@ export default function Home() {
               {communityStats ? (
                 <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3 stats-panel">
                   <p className="text-[10px] uppercase tracking-[0.35em] text-gray-400">Community stats</p>
-                  <p className="mt-2 text-sm text-gray-900">
+                  <p className="mt-2 text-[11px] text-gray-600">
                     {communityStats.total === 1
                       ? '1 person has played today'
                       : `${communityStats.total} have played today`}
