@@ -227,8 +227,10 @@ export default function Home() {
   }, [artistHints, targetArtist])
   const artistParagraphs = useMemo(() => {
     if (!art?.artist) return []
-    const meta = artistMeta || {}
-    const { birth_year: birth, death_year: death, movement, country } = meta
+    const birth = artistMeta?.birth_year ?? null
+    const death = artistMeta?.death_year ?? null
+    const movement = artistMeta?.movement ?? null
+    const country = artistMeta?.country ?? null
     const sentences: string[] = []
     let subject = art.artist
     if (typeof birth === 'number' && typeof death === 'number') {
@@ -1437,8 +1439,12 @@ export default function Home() {
             )}
             {communityStats && (
               <div className="mt-2 border-t border-gray-100 pt-2 text-[11px] text-gray-600 space-y-1">
+                <p className="uppercase tracking-[0.3em] text-[9px] text-gray-400">
+                  Community stats
+                </p>
                 <p>
-                  {communityStats.total} plays • {communityStats.successRate}% solved
+                  {communityStats.total} {communityStats.total === 1 ? 'person has' : 'people have'} played
+                  today • {communityStats.successRate}% solved
                 </p>
                 <p>{communityStats.fastRate}% cracked within 3 tries</p>
               </div>
