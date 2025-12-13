@@ -1451,7 +1451,7 @@ export default function Home() {
             <p className="text-sm tracking-tight text-gray-900 dark:text-slate-50">
               Answer: {art.title}
             </p>
-            <p className="text-sm font-light text-slate-700 dark:text-white/90">by {art.artist}</p>
+            <p className="text-sm font-light text-slate-700 dark:text-slate-200">by {art.artist}</p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
               {art.year} • {museumClue || 'Unknown location'}
             </p>
