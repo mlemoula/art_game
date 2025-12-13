@@ -195,6 +195,7 @@ export default function Home() {
   const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
   const [guessError, setGuessError] = useState<string | null>(null)
+  const [attemptsOpen, setAttemptsOpen] = useState(false)
   const maxAttempts = 5
   const inputRef = useRef<HTMLInputElement | null>(null)
   const blurTimeoutRef = useRef<number | null>(null)
@@ -894,6 +895,10 @@ export default function Home() {
     }
   }, [artId, guess, finished, success, attemptsHistory, playSaved])
 
+  useEffect(() => {
+    setAttemptsOpen(false)
+  }, [finished, artId])
+
   if (!art) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-white text-gray-600 font-mono">
@@ -922,23 +927,44 @@ export default function Home() {
 
   const normalize = normalizeString
 
-  const renderAttempts = (containerClass = 'mt-6 w-full max-w-[360px]') => {
+  const renderAttempts = (
+    containerClass = 'mt-6 w-full max-w-[360px]',
+    variant: 'card' | 'inline' = 'card'
+  ) => {
     if (!attemptsHistory.length) return null
     const reversed = [...attemptsHistory].reverse()
+    const compact = variant === 'inline'
+    const headerClasses = compact
+      ? 'text-[10px] uppercase tracking-[0.2em] text-slate-400 mb-2 flex justify-between'
+      : 'text-xs uppercase tracking-wide text-gray-500 mb-3 flex justify-between'
+    const glyphClasses = compact
+      ? 'font-mono text-[11px] text-gray-800 tracking-[0.12em]'
+      : 'font-mono text-[11px] text-gray-800 tracking-[0.12em]'
+    const listClasses = compact ? 'space-y-2' : 'space-y-3'
+    const itemClasses = compact
+      ? 'border-b border-gray-100 pb-2 last:border-b-0 last:pb-0'
+      : 'border-b border-gray-100 pb-2 last:border-b-0 last:pb-0'
+    const attemptLabelClass = compact
+      ? 'text-[12px] text-slate-600 flex items-center justify-between'
+      : 'text-xs text-slate-600 flex items-center justify-between'
     return (
-      <div className={`${containerClass} border border-gray-100 rounded-2xl bg-white/80 shadow-sm p-4`}>
-        <div className="text-xs uppercase tracking-wide text-gray-500 mb-3 flex justify-between">
+      <div
+        className={
+          variant === 'card'
+            ? `${containerClass} border border-gray-100 rounded-2xl bg-white/80 shadow-sm p-4`
+            : containerClass || undefined
+        }
+      >
+        <div className={headerClasses}>
           <span>Attempts</span>
-          <span className="font-mono text-[11px] text-gray-800">
-            {shareGlyphs}
-          </span>
+          <span className={glyphClasses}>{shareGlyphs}</span>
         </div>
-        <ul className="space-y-3">
+        <ul className={listClasses}>
           {reversed.map((entry, idx) => {
             const attemptNumber = attemptsHistory.length - idx
             return (
-              <li key={`${entry.guess}-${idx}`} className="border-b border-gray-100 pb-2 last:border-b-0 last:pb-0">
-                <div className="text-xs text-slate-600 flex items-center justify-between">
+              <li key={`${entry.guess}-${idx}`} className={itemClasses}>
+                <div className={attemptLabelClass}>
                   <span
                     className={`truncate ${
                       entry.correct ? 'font-medium text-emerald-700' : ''
@@ -1183,11 +1209,11 @@ export default function Home() {
       ? `${playStats.currentStreak}-day streak`
       : null
   const frameOuterClass = finished
-    ? 'w-full sm:w-auto max-w-[420px] rounded-2xl border border-gray-300 bg-gray-50 p-3 shadow-sm transition-all duration-300 mx-auto'
-    : 'w-full max-w-[420px] rounded-xl border border-gray-200 bg-white transition-all duration-300'
+    ? 'w-full sm:w-auto max-w-[420px] rounded-[32px] border border-slate-200 bg-slate-50/90 p-3 shadow-sm transition-all duration-300 mx-auto'
+    : 'w-full max-w-[420px] rounded-[28px] border border-slate-200 bg-white transition-all duration-300'
   const frameInnerClass = finished
-    ? 'overflow-hidden rounded-xl border border-gray-100 bg-white'
-    : 'overflow-hidden rounded-lg'
+    ? 'overflow-hidden rounded-[26px] border border-white bg-white'
+    : 'overflow-hidden rounded-2xl bg-white'
 
   return (
     <div className="flex flex-col items-center px-4 sm:px-6 py-4 min-h-screen bg-white text-gray-900 font-mono">
@@ -1210,17 +1236,17 @@ export default function Home() {
           animation: confetti-fall 1.2s ease-out forwards;
         }
       `}</style>
-      <div className="relative w-full max-w-[420px] flex justify-center mb-6">
+      <div className="w-full max-w-[420px] relative flex items-center justify-center mb-6">
         <h1 className="text-xl font-normal tracking-tight uppercase">4rtW0rk</h1>
+        <button
+          type="button"
+          aria-label="How to play"
+          onClick={() => setShowHelp(true)}
+          className="absolute right-0 text-xs border border-gray-300 rounded-full px-2 py-1 text-gray-600 hover:bg-gray-100 transition-colors"
+        >
+          ?
+        </button>
       </div>
-      <button
-        type="button"
-        aria-label="How to play"
-        onClick={() => setShowHelp(true)}
-        className="absolute top-4 right-4 text-xs border border-gray-300 rounded-full px-2 py-1 text-gray-600 hover:bg-gray-100"
-      >
-        ?
-      </button>
 
       {/* Affiche placeholder jusqu'à ce que l'image jouable soit prête */}
       <div className={frameOuterClass}>
@@ -1367,7 +1393,7 @@ export default function Home() {
             Submit
           </button>
           <div className="text-[11px] text-gray-500 text-center space-y-1">
-            <p className="font-mono text-sm text-gray-800 text-center tracking-wide">
+            <p className="font-mono text-sm text-gray-800 text-center tracking-[0.12em]">
               {shareGlyphs}
             </p>
             {attemptsHistory.length >= 1 && (
@@ -1387,122 +1413,167 @@ export default function Home() {
         </div>
       )}
 
-      {playStats && (
-        <div className="mt-5 w-full max-w-[360px] text-[10px] text-gray-500">
-          <p className="uppercase tracking-wide text-[9px] text-gray-400 mb-1">Your stats</p>
-          <div className="flex justify-between">
-            <span>Total plays</span>
-            <span className="text-gray-800">{playStats.total}</span>
-          </div>
-          <div className="flex justify-between mt-1">
-            <span>Wins</span>
-            <span className="text-gray-800">{playStats.wins}</span>
-          </div>
-          <div className="flex justify-between mt-1">
-            <span>Current streak</span>
-            <span className="text-gray-800">{playStats.currentStreak}</span>
-          </div>
-          <div className="flex justify-between mt-1">
-            <span>Best streak</span>
-            <span className="text-gray-800">{playStats.bestStreak}</span>
-          </div>
-          {typeof playStats.fastestWin === 'number' && (
-            <div className="flex justify-between mt-1">
-              <span>Fastest solve</span>
-              <span className="text-gray-800">
-                {playStats.fastestWin} attempt{playStats.fastestWin === 1 ? '' : 's'}
-              </span>
+      {playStats && !finished && (
+        <div className="mt-5 w-full max-w-[360px] rounded-2xl border border-gray-100 bg-white/80 p-4 text-[11px] text-gray-600">
+          <p className="uppercase tracking-[0.25em] text-[9px] text-gray-400 mb-2">Your stats</p>
+          <dl className="space-y-1">
+            <div className="flex justify-between">
+              <dt>Total plays</dt>
+              <dd className="text-gray-900">{playStats.total}</dd>
             </div>
-          )}
+            <div className="flex justify-between">
+              <dt>Wins</dt>
+              <dd className="text-gray-900">{playStats.wins}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Current streak</dt>
+              <dd className="text-gray-900">{playStats.currentStreak}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Best streak</dt>
+              <dd className="text-gray-900">{playStats.bestStreak}</dd>
+            </div>
+            {typeof playStats.fastestWin === 'number' && (
+              <div className="flex justify-between">
+                <dt>Fastest solve</dt>
+                <dd className="text-gray-900">
+                  {playStats.fastestWin} attempt{playStats.fastestWin === 1 ? '' : 's'}
+                </dd>
+              </div>
+            )}
+          </dl>
         </div>
       )}
 
       {!finished && renderAttempts()}
 
       {finished && (
-        <div className="mt-6 text-center max-w-lg space-y-4">
-          <div className="w-full max-w-[360px] mx-auto border border-gray-200 rounded-2xl p-4 text-left space-y-2 bg-white shadow-sm">
-            <p className="text-[11px] uppercase tracking-wide text-gray-500">
+        <div className="mt-6 w-full flex flex-col items-center gap-5">
+          <div className="w-full max-w-[360px] border border-gray-200 rounded-2xl p-4 text-left space-y-3 bg-white shadow-sm">
+            <p className="text-[11px] uppercase tracking-[0.35em] text-gray-400">
               <span className="text-gray-900">{outcomeLabel}</span>{' '}
               <span className="text-gray-500">— {outcomeSubline}</span>
             </p>
             {streakBadge && (
-              <p className="text-[10px] text-emerald-600 uppercase tracking-wide">{streakBadge}</p>
+              <p className="text-[10px] text-emerald-600 uppercase tracking-[0.35em]">{streakBadge}</p>
             )}
-            <p className="font-mono text-lg tracking-wider text-gray-800">{shareGlyphs}</p>
+            <p className="font-mono text-lg tracking-[0.12em] text-gray-900 text-center">{shareGlyphs}</p>
             <button
               type="button"
               onClick={() => void handleShare()}
-              className="w-full border border-gray-900 text-gray-900 rounded px-3 py-2 text-xs tracking-tight hover:bg-gray-100 transition-colors"
+              className="w-full border border-gray-900 text-gray-900 rounded-full px-4 py-2 text-xs tracking-[0.25em] hover:bg-gray-100 transition-colors"
             >
               Share result
             </button>
-            {shareMessage && (
-              <p className="text-[10px] text-gray-500">{shareMessage}</p>
-            )}
-            {communityStats && (
-              <div className="mt-2 border-t border-gray-100 pt-2 text-[11px] text-gray-600 space-y-1">
-                <p className="uppercase tracking-[0.3em] text-[9px] text-gray-400">
-                  Community stats
-                </p>
-                <p>
-                  {communityStats.total} {communityStats.total === 1 ? 'person has' : 'people have'} played
-                  today • {communityStats.successRate}% solved
-                </p>
-                <p>{communityStats.fastRate}% cracked within 3 tries</p>
-              </div>
-            )}
+            {shareMessage && <p className="text-[10px] text-gray-500">{shareMessage}</p>}
+            <div className="pt-3 border-t border-gray-100 space-y-3">
+              {playStats ? (
+                <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.35em] text-gray-400">Your stats</p>
+                  <dl className="mt-2 space-y-1 text-[11px] text-gray-600">
+                    <div className="flex justify-between">
+                      <dt>Total plays</dt>
+                      <dd className="text-gray-900">{playStats.total}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Wins</dt>
+                      <dd className="text-gray-900">{playStats.wins}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Current streak</dt>
+                      <dd className="text-gray-900">{playStats.currentStreak}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Best streak</dt>
+                      <dd className="text-gray-900">{playStats.bestStreak}</dd>
+                    </div>
+                    {typeof playStats.fastestWin === 'number' && (
+                      <div className="flex justify-between">
+                        <dt>Fastest solve</dt>
+                        <dd className="text-gray-900">
+                          {playStats.fastestWin} attempt{playStats.fastestWin === 1 ? '' : 's'}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
+              ) : null}
+              {communityStats ? (
+                <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.35em] text-gray-400">Community stats</p>
+                  <p className="mt-2 text-sm text-gray-900">
+                    {communityStats.total === 1
+                      ? '1 person has played today'
+                      : `${communityStats.total} have played today`}
+                  </p>
+                  <p className="text-[11px] text-gray-600">
+                    {communityStats.successRate}% solved • {communityStats.fastRate}% in 3 tries or fewer
+                  </p>
+                </div>
+              ) : null}
+              {attemptsHistory.length > 0 ? (
+                <div className="rounded-2xl border border-gray-100 bg-white p-3">
+                  <button
+                    type="button"
+                    onClick={() => setAttemptsOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between text-left text-sm text-gray-700"
+                  >
+                    <span>Attempts breakdown</span>
+                    <span className="text-xs text-gray-500">
+                      {attemptsOpen ? 'Hide details' : 'Show details'}
+                    </span>
+                  </button>
+                  {attemptsOpen && <div className="mt-3">{renderAttempts('', 'inline')}</div>}
+                </div>
+              ) : null}
+            </div>
           </div>
-          <div className="mt-4 w-full text-left space-y-3">
+          <div className="w-full text-left space-y-3 max-w-[360px]">
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
               <div className="space-y-2">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
-                  The artist
-                </p>
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">The artist</p>
                 {artistDetailParagraphs.map((paragraph, idx) => (
                   <p key={`artist-${idx}`} className="text-sm leading-relaxed text-slate-900">
                     {paragraph}
+                    {artistWikiHref ? (
+                      <>
+                        <br />
+                        <a
+                          href={artistWikiHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-slate-400 underline decoration-dotted hover:text-slate-600"
+                        >
+                          learn more about {art.artist}
+                        </a>
+                      </>
+                    ) : null}
                   </p>
                 ))}
               </div>
               <div className="border-t border-slate-100 pt-4 space-y-2">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
-                  The artwork
-                </p>
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">The artwork</p>
                 {paintingParagraphs.map((paragraph, idx) => (
                   <p key={`artwork-${idx}`} className="text-sm leading-relaxed text-slate-900">
                     {paragraph}
+                    {art.wiki_summary_url ? (
+                      <>
+                        <br />
+                        <a
+                          href={art.wiki_summary_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-slate-400 underline decoration-dotted hover:text-slate-600"
+                        >
+                          learn more about the painting
+                        </a>
+                      </>
+                    ) : null}
                   </p>
                 ))}
               </div>
             </div>
-            <p className="text-sm text-slate-500">
-              Learn more on{' '}
-              {artistWikiHref ? (
-                <>
-                  <a
-                    href={artistWikiHref}
-                    target="_blank"
-                    className="text-slate-800 underline decoration-slate-300 hover:decoration-slate-800"
-                    rel="noreferrer"
-                  >
-                    the artist&apos;s page
-                  </a>
-                  {' '}or{' '}
-                </>
-              ) : null}
-              <a
-                href={art.wiki_summary_url}
-                target="_blank"
-                className="text-slate-800 underline decoration-slate-300 hover:decoration-slate-800"
-                rel="noreferrer"
-              >
-                the artwork entry
-              </a>
-              .
-            </p>
           </div>
-          {renderAttempts('mt-6 w-full max-w-[360px] mx-auto')}
         </div>
       )}
       {showHelp && (
