@@ -920,7 +920,9 @@ export default function Home() {
     const stored = window.localStorage.getItem('art_game_theme')
     if (stored === 'dark' || stored === 'light') {
       setTheme(stored)
-    } else if (typeof window.matchMedia === 'function') {
+      return
+    }
+    if (typeof window.matchMedia === 'function') {
       const media = window.matchMedia('(prefers-color-scheme: dark)')
       setTheme(media.matches ? 'dark' : 'light')
       const listener = (event: MediaQueryListEvent) => {
@@ -933,6 +935,17 @@ export default function Home() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const root = window.document.documentElement
+    root.dataset.theme = theme
+    if (theme === 'dark') {
+      root.classList.add('dark')
+    } else {
+      root.classList.remove('dark')
+    }
+  }, [theme])
 
   const normalize = normalizeString
   const usedGuessSet = useMemo(() => {
@@ -1317,6 +1330,12 @@ export default function Home() {
         [data-theme='dark'] .attempt-card {
           background-color: rgba(15, 23, 42, 0.85);
         }
+        .attempt-breakdown {
+          background-color: rgba(255, 255, 255, 0.95);
+        }
+        [data-theme='dark'] .attempt-breakdown {
+          background-color: rgba(15, 23, 42, 0.95);
+        }
         .hover-bg-secondary:hover {
           background-color: rgba(248, 250, 252, 0.75);
         }
@@ -1328,6 +1347,14 @@ export default function Home() {
           border-color: rgba(148, 163, 184, 0.6);
         }
         [data-theme='dark'] .result-card {
+          background-color: rgba(15, 23, 42, 0.85);
+          border-color: rgba(59, 130, 246, 0.3);
+        }
+        .answer-card {
+          background-color: rgba(255, 255, 255, 0.95);
+          border-color: rgba(148, 163, 184, 0.6);
+        }
+        [data-theme='dark'] .answer-card {
           background-color: rgba(15, 23, 42, 0.85);
           border-color: rgba(59, 130, 246, 0.3);
         }
@@ -1393,6 +1420,32 @@ export default function Home() {
         [data-theme='dark'] .text-slate-500 {
           color: #94a3b8 !important;
         }
+        .answer-label {
+          color: #94a3b8;
+        }
+        [data-theme='dark'] .answer-label {
+          color: #94a3b8;
+        }
+        .answer-title,
+        .answer-subtitle {
+          color: #0f172a;
+        }
+        [data-theme='dark'] .answer-title,
+        [data-theme='dark'] .answer-subtitle {
+          color: #f8fafc;
+        }
+        .answer-artist {
+          color: #0f172a;
+        }
+        [data-theme='dark'] .answer-artist {
+          color: #cbd5f5;
+        }
+        .answer-meta {
+          color: #475569;
+        }
+        [data-theme='dark'] .answer-meta {
+          color: #94a3b8;
+        }
       `}</style>
       <div className="w-full max-w-[420px] relative flex items-center justify-center gap-2 mb-6">
         <h1 className="text-xl font-normal tracking-tight uppercase">4rtW0rk</h1>
@@ -1446,15 +1499,13 @@ export default function Home() {
       </div>
 
       {finished && (
-        <div className="mt-4 w-[320px] text-center text-xs text-gray-600">
-          <div className="mt-5 w-full max-w-[360px] rounded-2xl border border-gray-100 bg-white/80 p-4 text-[11px] text-gray-600 result-card">
-            <p className="text-sm tracking-tight text-gray-900 dark:text-slate-50">
-              {art.title}
+        <div className="mt-2 w-[320px] text-center text-xs text-gray-600">
+          <div className="w-full max-w-[360px] rounded-2xl p-4 text-center space-y-1 result-card answer-card">
+            <p className="text-sm tracking-tight answer-title">{art.title}</p>
+            <p className="text-sm tracking-tight answer-subtitle">
+              by <span className="answer-artist font-semibold">{art.artist}</span>
             </p>
-            <p className="text-sm tracking-tight text-gray-900 dark:text-slate-50">
-              by <span className="font-semibold">{art.artist}</span>
-            </p>
-            <p className="mt-2 text-[11px] text-[11px] text-slate-500 dark:text-slate-400">
+            <p className="mt-2 text-[11px] answer-meta">
               {art.year} • {museumClue || 'Unknown location'}
             </p>
           </div>
@@ -1694,7 +1745,7 @@ export default function Home() {
                 </div>
               ) : null}
               {attemptsHistory.length > 0 ? (
-                <div className="rounded-2xl border border-gray-100 bg-white p-3">
+                <div className="rounded-2xl border border-gray-100 p-3 attempt-breakdown">
                   <button
                     type="button"
                     onClick={() => setAttemptsOpen((prev) => !prev)}
