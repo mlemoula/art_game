@@ -195,6 +195,7 @@ export default function Home() {
   const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
   const [guessError, setGuessError] = useState<string | null>(null)
+  const [gaveUp, setGaveUp] = useState(false)
   const [attemptsOpen, setAttemptsOpen] = useState(false)
   const maxAttempts = 5
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -777,8 +778,11 @@ export default function Home() {
       if (!attempt) return '.'
       return attempt.correct ? '✅' : '×'
     })
+    if (gaveUp && finished && !success) {
+      return tokens.map((token) => (token === '.' ? '×' : token)).join(' ')
+    }
     return tokens.join(' ')
-  }, [attemptsHistory, maxAttempts])
+  }, [attemptsHistory, maxAttempts, gaveUp, finished, success])
 
   const buildShareContent = () => {
     if (!art) return ''
@@ -787,9 +791,8 @@ export default function Home() {
       process.env.NEXT_PUBLIC_APP_URL ||
       (typeof window !== 'undefined' ? window.location.origin : '')
     const pitchLines = [
-      '4rtW0rk — one art puzzle a day',
-      'Test your culture, discover painters, no ads.',
-      'Tap to play & beat my score:',
+      '4rtW0rk - Daily art puzzle',
+      'Can you guess who painted it and beat my score?',
       grid,
     ]
     if (urlHint) pitchLines.push(urlHint)
@@ -899,6 +902,19 @@ export default function Home() {
     setAttemptsOpen(false)
   }, [finished, artId])
 
+  useEffect(() => {
+    setGaveUp(false)
+  }, [artId])
+
+  const normalize = normalizeString
+  const usedGuessSet = useMemo(() => {
+    const set = new Set<string>()
+    attemptsHistory.forEach((attempt) => {
+      set.add(normalize(attempt.guess))
+    })
+    return set
+  }, [attemptsHistory])
+
   if (!art) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-white text-gray-600 font-mono">
@@ -924,15 +940,6 @@ export default function Home() {
   const artistWikiHref =
     (artistMeta as { wiki_summary_url?: string | null })?.wiki_summary_url ||
     fallbackArtistWikiUrl
-
-  const normalize = normalizeString
-  const usedGuessSet = useMemo(() => {
-    const set = new Set<string>()
-    attemptsHistory.forEach((attempt) => {
-      set.add(normalize(attempt.guess))
-    })
-    return set
-  }, [attemptsHistory])
 
   const renderAttempts = (
     containerClass = 'mt-6 w-full max-w-[360px]',
@@ -1017,6 +1024,7 @@ export default function Home() {
     const trimmedGuess = rawGuess.trim()
     if (!trimmedGuess) return
     const guessNorm = normalize(trimmedGuess)
+    setGaveUp(false)
     if (!allowedGuessSet.has(guessNorm)) {
       setGuessError('Pick an artist from the suggestions.')
       return
@@ -1171,6 +1179,16 @@ export default function Home() {
     }
   }
 
+  const handleGiveUp = () => {
+    if (finished || !art) return
+    setFinished(true)
+    setSuccess(false)
+    setGuess('')
+    setSuggestionsOpen(false)
+    setGuessError(null)
+    setGaveUp(true)
+  }
+
   const selectSuggestion = (name: string, submitAfter = false) => {
     setGuess(name)
     setSuggestionsOpen(false)
@@ -1257,6 +1275,9 @@ export default function Home() {
         >
           ?
         </button>
+        <p className="sr-only">
+          Guess the painter in up to five attempts. Each wrong guess gracefully zooms out the artwork to reveal more clues.
+        </p>
       </div>
 
       {/* Affiche placeholder jusqu'à ce que l'image jouable soit prête */}
@@ -1421,6 +1442,13 @@ export default function Home() {
               </p>
             )}
           </div>
+          <button
+            type="button"
+            onClick={handleGiveUp}
+            className="w-full text-center text-xs text-gray-500 underline decoration-dotted hover:text-gray-800"
+          >
+            I give up, show me the answer
+          </button>
         </div>
       )}
 
@@ -1529,7 +1557,7 @@ export default function Home() {
                     onClick={() => setAttemptsOpen((prev) => !prev)}
                     className="flex w-full items-center justify-between text-left text-sm text-gray-700"
                   >
-                    <span>Attempts breakdown</span>
+                    <span>Breakdown of my attempts</span>
                     <span className="text-xs text-gray-500">
                       {attemptsOpen ? 'Hide details' : 'Show details'}
                     </span>
