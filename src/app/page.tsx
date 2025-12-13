@@ -1257,11 +1257,11 @@ export default function Home() {
 
   const placeholderText = 'Who painted this?'
   const attemptsUsed = attemptsHistory.length
-  const outcomeLabel = finished ? (success ? 'Victory' : 'Not this time') : ''
+  const outcomeLabel = finished ? (success ? 'Congrats !' : 'Not this time') : ''
   const outcomeSubline = finished
     ? success
-      ? 'Great eye, see you tomorrow.'
-      : 'New masterpiece tomorrow, stay sharp.'
+      ? 'See you tomorrow.'
+      : 'Better luck tomorrow.'
     : ''
   const streakBadge =
     playStats?.currentStreak && playStats.currentStreak >= 2
@@ -1299,11 +1299,11 @@ export default function Home() {
         }
         .stats-card {
           background-color: rgba(255, 255, 255, 0.95);
-          border-color: rgba(148, 163, 184, 0.7);
+          border-color: rgba(148, 163, 184, 0.4);
         }
         [data-theme='dark'] .stats-card {
-          background-color: rgba(15, 23, 42, 0.85);
-          border-color: rgba(148, 163, 184, 0.5);
+          background-color: rgba(15, 23, 42, 0.75);
+          border-color: rgba(148, 163, 184, 0.35);
         }
         .stats-panel {
           background-color: rgba(248, 250, 252, 0.7);
@@ -1333,11 +1333,11 @@ export default function Home() {
         }
         .frame-outer {
           background-color: rgba(255, 255, 255, 0.95);
-          border-color: rgba(148, 163, 184, 0.5);
+          border-color: rgba(148, 163, 184, 0.35);
         }
         [data-theme='dark'] .frame-outer {
-          background-color: rgba(2, 6, 23, 0.95);
-          border-color: rgba(59, 130, 246, 0.3);
+          background-color: rgba(2, 6, 23, 0.98);
+          border-color: rgba(59, 130, 246, 0.2);
         }
         .button-hover {
           transition: background-color 0.2s ease;
@@ -1447,12 +1447,14 @@ export default function Home() {
 
       {finished && (
         <div className="mt-4 w-[320px] text-center text-xs text-gray-600">
-          <div className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 result-card">
+          <div className="mt-5 w-full max-w-[360px] rounded-2xl border border-gray-100 bg-white/80 p-4 text-[11px] text-gray-600 result-card">
             <p className="text-sm tracking-tight text-gray-900 dark:text-slate-50">
-              Answer: {art.title}
+              {art.title}
             </p>
-            <p className="text-sm font-light text-slate-700 dark:text-slate-200">by {art.artist}</p>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            <p className="text-sm tracking-tight text-gray-900 dark:text-slate-50">
+              by <span className="font-semibold">{art.artist}</span>
+            </p>
+            <p className="mt-2 text-[11px] text-[11px] text-slate-500 dark:text-slate-400">
               {art.year} • {museumClue || 'Unknown location'}
             </p>
           </div>
