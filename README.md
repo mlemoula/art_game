@@ -1,6 +1,6 @@
 # Art Game - 4rtW0rk
 
-Minimalist daily art guessing game powered by Next.js and Supabase.
+Minimalist daily one minute art guessing game powered by Next.js and Supabase.
 👉 https://4rtw0rk.vercel.app/
 
 ## Deploy

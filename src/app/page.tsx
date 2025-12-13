@@ -1,5 +1,5 @@
 'use client'
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { Analytics } from '@vercel/analytics/next'
 import ZoomableImage from '@/components/ZoomableImage'
 import { getWikimediaUrls } from '@/utils/getWikimediaUrls'
@@ -198,6 +198,7 @@ export default function Home() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [gaveUp, setGaveUp] = useState(false)
   const [attemptsOpen, setAttemptsOpen] = useState(false)
+  const [loadingPreviousPuzzle, setLoadingPreviousPuzzle] = useState(false)
   const maxAttempts = 5
   const inputRef = useRef<HTMLInputElement | null>(null)
   const blurTimeoutRef = useRef<number | null>(null)
@@ -253,28 +254,35 @@ export default function Home() {
     return [sentences.join(' ')]
   }, [art?.artist, artistMeta])
 
+  const requestArtFromApi = useCallback(
+    async (params: URLSearchParams, signal?: AbortSignal) => {
+      const query = params.toString()
+      const response = await fetch(`/api/today${query ? `?${query}` : ''}`, {
+        signal,
+      })
+      if (!response.ok) {
+        throw new Error('Failed to load artwork')
+      }
+      const payload = (await response.json()) as DailyArt
+      setArt(payload)
+    },
+    []
+  )
+
   // Récupérer l'art du jour (ou date spécifique via query param)
   useEffect(() => {
     const controller = new AbortController()
     const loadArt = async () => {
       try {
-        let query = ''
+        const params = new URLSearchParams()
         if (typeof window !== 'undefined') {
           const currentParams = new URLSearchParams(window.location.search)
-          const forwardParams = new URLSearchParams()
           const offset = currentParams.get('offset')
           const date = currentParams.get('date')
-          if (offset) forwardParams.set('offset', offset)
-          if (date) forwardParams.set('date', date)
-          const built = forwardParams.toString()
-          query = built ? `?${built}` : ''
+          if (offset) params.set('offset', offset)
+          if (date) params.set('date', date)
         }
-        const response = await fetch(`/api/today${query}`, {
-          signal: controller.signal,
-        })
-        if (!response.ok) throw new Error('Failed to load artwork')
-        const payload = await response.json()
-        setArt(payload)
+        await requestArtFromApi(params, controller.signal)
       } catch (error) {
         if ((error as Error)?.name === 'AbortError') return
         console.error('Unable to load artwork', error)
@@ -283,7 +291,7 @@ export default function Home() {
     }
     loadArt()
     return () => controller.abort()
-  }, [])
+  }, [requestArtFromApi])
 
   const mediaUrls = art
     ? getWikimediaUrls(art.image_url)
@@ -792,7 +800,7 @@ export default function Home() {
       process.env.NEXT_PUBLIC_APP_URL ||
       (typeof window !== 'undefined' ? window.location.origin : '')
     const pitchLines = [
-      '4rtW0rk - Daily art puzzle',
+      '4rtW0rk - One minute art puzzle',
       'Can you guess who painted it and beat my score?',
       grid,
     ]
@@ -827,6 +835,20 @@ export default function Home() {
       }
     } catch {
       setShareMessage('Share canceled or unavailable.')
+    }
+  }
+
+  const handleTryPreviousPuzzle = async () => {
+    if (loadingPreviousPuzzle) return
+    setLoadingPreviousPuzzle(true)
+    try {
+      const params = new URLSearchParams()
+      params.set('offset', '-1')
+      await requestArtFromApi(params)
+    } catch (error) {
+      console.error('Unable to load previous puzzle', error)
+    } finally {
+      setLoadingPreviousPuzzle(false)
     }
   }
 
@@ -1646,6 +1668,8 @@ export default function Home() {
         </div>
       )}
 
+      {!finished && renderAttempts()}
+
       {playStats && !finished && (
         <div className="mt-5 w-full max-w-[360px] rounded-2xl border border-gray-100 bg-white/80 p-4 text-[11px] text-gray-600 stats-card">
           <p className="uppercase tracking-[0.25em] text-[9px] text-gray-400 mb-2">Your stats</p>
@@ -1678,14 +1702,12 @@ export default function Home() {
         </div>
       )}
 
-      {!finished && renderAttempts()}
-
       {finished && (
         <div className="mt-6 w-full flex flex-col items-center gap-5">
           <div className="w-full max-w-[360px] border border-gray-200 rounded-2xl p-4 text-left space-y-3 bg-white shadow-sm">
             <p className="text-[11px] uppercase tracking-[0.35em] text-gray-400">
               <span className="text-gray-900">{outcomeLabel}</span>{' '}
-              <span className="text-gray-500">— {outcomeSubline}</span>
+              <span className="text-gray-500">- {outcomeSubline}</span>
             </p>
             {streakBadge && (
               <p className="text-[10px] text-emerald-600 uppercase tracking-[0.35em]">{streakBadge}</p>
@@ -1697,6 +1719,14 @@ export default function Home() {
               className="w-full border border-gray-900 text-gray-900 rounded-full px-4 py-2 text-xs tracking-[0.25em] button-hover"
             >
               Share result
+            </button>
+            <button
+              type="button"
+              onClick={handleTryPreviousPuzzle}
+              disabled={loadingPreviousPuzzle}
+              className="w-full border border-gray-300 text-gray-600 rounded-full px-4 py-2 text-xs tracking-[0.25em] button-hover disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {loadingPreviousPuzzle ? 'Loading yesterday…' : "Try yesterday's puzzle"}
             </button>
             {shareMessage && <p className="text-[10px] text-gray-500">{shareMessage}</p>}
             <div className="pt-3 border-t border-gray-100 space-y-3">
@@ -1818,9 +1848,10 @@ export default function Home() {
               artwork.
             </p>
             <ul className="text-xs text-gray-600 space-y-1 list-disc list-inside">
-              <li>Start from a tight detail—type an artist&apos;s name.</li>
-              <li>Hints appear as you miss: venue clues, era cues, movement &amp; country comparisons.</li>
-              <li>The image gracefully de-zooms until the full painting is unveiled.</li>
+              <li>Start from a tight detail</li>
+              <li>Type an artist&apos;s name.</li>
+              <li>Hints appear as you miss: venue clues, era, movement &amp; country comparisons.</li>
+              <li>The image de-zooms until the full painting is unveiled.</li>
             </ul>
             <div className="flex justify-end">
               <button
@@ -1835,7 +1866,7 @@ export default function Home() {
         </div>
       )}
       <p className="mt-8 text-[10px] text-gray-400 tracking-wide uppercase text-center">
-        Crafted with care —{' '}
+        Crafted with care -{' '}
         <a
           href="https://www.linkedin.com/in/martin-lemoulant/"
           target="_blank"
