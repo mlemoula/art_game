@@ -7,6 +7,7 @@ export interface ArtistRecommendation {
   birth_year?: number | null
   death_year?: number | null
   popularity_score?: number | null
+  wiki_summary_url?: string | null
 }
 
 const ARTIST_COLUMNS =

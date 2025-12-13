@@ -97,6 +97,16 @@ const FEEDBACK_TONES: Record<FeedbackStatus, string> = {
 
 const DEFAULT_ARTIST_SUGGESTIONS = FALLBACK_ARTISTS.map((artist) => artist.name)
 const MAX_WIKI_PARAGRAPHS = 4
+const ASSUMED_MAX_ARTIST_AGE = 85
+const normalizeSuccessFlag = (value: unknown): boolean => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return normalized === 'true' || normalized === 't' || normalized === '1'
+  }
+  return false
+}
 
 const stripHtml = (value: string) => {
   const content = value || ''
@@ -115,6 +125,17 @@ const extractParagraphs = (raw: string) =>
     .map((p) => p.trim())
     .filter(Boolean)
     .slice(0, MAX_WIKI_PARAGRAPHS)
+
+const cleanArtistIntroParagraphs = (paragraphs: string[]) =>
+  paragraphs
+    .map((p) =>
+      p
+        .replace(/\([^)]*pronunciation[^)]*\)/gi, '')
+        .replace(/\([^)]*\d{3,4}[^)]*\)/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+    )
+    .filter((p) => p.length > 0)
 
 const extractTextFromWikiJson = (payload: unknown): string => {
   if (!payload || typeof payload !== 'object') return ''
@@ -169,12 +190,63 @@ export default function Home() {
   const [playStats, setPlayStats] = useState<UserStats | null>(null)
   const [communityStats, setCommunityStats] = useState<CommunityStats | null>(null)
   const [wikiIntro, setWikiIntro] = useState<string[]>([])
+  const [artistWikiIntro, setArtistWikiIntro] = useState<string[]>([])
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
   const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
+  const [guessError, setGuessError] = useState<string | null>(null)
   const maxAttempts = 5
   const inputRef = useRef<HTMLInputElement | null>(null)
   const blurTimeoutRef = useRef<number | null>(null)
+  const submitLockRef = useRef(false)
+  const targetArtist = art?.artist ?? ''
+  const artistSuggestions = useMemo(() => {
+    const map = new Map<string, string>()
+    const addName = (name?: string) => {
+      if (!name) return
+      const key = normalizeString(name)
+      if (!map.has(key)) map.set(key, name)
+    }
+    addName(targetArtist)
+    artistHints.forEach((hint) => addName(hint.name))
+    DEFAULT_ARTIST_SUGGESTIONS.forEach(addName)
+    return Array.from(map.values())
+  }, [targetArtist, artistHints])
+  const allowedGuessSet = useMemo(() => {
+    const set = new Set<string>()
+    artistSuggestions.forEach((name) => {
+      if (name) set.add(normalizeString(name))
+    })
+    return set
+  }, [artistSuggestions])
+  const artistMeta = useMemo(() => {
+    const key = normalizeString(targetArtist || '')
+    return artistHints.find(
+      (hint) => normalizeString(hint.name || '') === key
+    )
+  }, [artistHints, targetArtist])
+  const artistParagraphs = useMemo(() => {
+    if (!art?.artist) return []
+    const meta = artistMeta || {}
+    const { birth_year: birth, death_year: death, movement, country } = meta
+    const sentences: string[] = []
+    let subject = art.artist
+    if (typeof birth === 'number' && typeof death === 'number') {
+      subject += ` (${birth}–${death})`
+    }
+    const descriptorBase = movement
+      ? `painter associated with the ${movement} movement`
+      : 'painter'
+    const descriptor = country ? `${country} ${descriptorBase}` : descriptorBase
+    sentences.push(`${subject} was a ${descriptor}.`)
+    const timelineParts: string[] = []
+    if (typeof birth === 'number') timelineParts.push(`born in ${birth}`)
+    if (typeof death === 'number') timelineParts.push(`died in ${death}`)
+    if (timelineParts.length) {
+      sentences.push(`They were ${timelineParts.join(' and ')}.`)
+    }
+    return [sentences.join(' ')]
+  }, [art?.artist, artistMeta])
 
   // Récupérer l'art du jour (ou date spécifique via query param)
   useEffect(() => {
@@ -339,13 +411,16 @@ export default function Home() {
 
         if (!cancelled && data) {
           const total = data.length
-          const wins = data.filter((row) => row.success).length
+          const wins = data.filter((row) => normalizeSuccessFlag(row.success)).length
           const byDay = new Map<string, { success: boolean; attempts?: number | null }>()
           data.forEach((row) => {
             const key = extractDayKey(row.created_at)
             if (!key) return
             if (!byDay.has(key)) {
-              byDay.set(key, { success: row.success, attempts: row.attempts })
+              byDay.set(key, {
+                success: normalizeSuccessFlag(row.success),
+                attempts: row.attempts,
+              })
             }
           })
           const orderedDays = Array.from(byDay.entries()).sort((a, b) =>
@@ -388,7 +463,10 @@ export default function Home() {
             }
           }
           const fastestWin = data
-            .filter((row) => row.success && typeof row.attempts === 'number')
+            .filter(
+              (row) =>
+                normalizeSuccessFlag(row.success) && typeof row.attempts === 'number'
+            )
             .reduce<number | null>(
               (best, row) =>
                 best === null
@@ -450,6 +528,49 @@ export default function Home() {
       cancelled = true
     }
   }, [art?.wiki_summary_url])
+
+  useEffect(() => {
+    if (!art?.artist) {
+      setArtistWikiIntro([])
+      return
+    }
+    let cancelled = false
+    const fetchArtistWiki = async () => {
+      const preferredUrl =
+        (artistMeta as { wiki_summary_url?: string | null })?.wiki_summary_url ||
+        (art.artist
+          ? `https://en.wikipedia.org/wiki/${encodeURIComponent(
+              art.artist.replace(/\s+/g, '_')
+            )}`
+          : '')
+      if (!preferredUrl) {
+        if (!cancelled) setArtistWikiIntro([])
+        return
+      }
+      try {
+        const summaryUrl = buildWikiApiUrl(preferredUrl)
+        const response = await fetch(summaryUrl, {
+          headers: { accept: 'application/json' },
+        })
+        const contentType = response.headers.get('content-type') || ''
+        let rawText = ''
+        if (contentType.includes('application/json')) {
+          const json = await response.json()
+          rawText = extractTextFromWikiJson(json)
+        } else {
+          rawText = await response.text()
+        }
+        const paragraphs = cleanArtistIntroParagraphs(extractParagraphs(rawText))
+        if (!cancelled) setArtistWikiIntro(paragraphs)
+      } catch {
+        if (!cancelled) setArtistWikiIntro([])
+      }
+    }
+    fetchArtistWiki()
+    return () => {
+      cancelled = true
+    }
+  }, [art?.artist, artistMeta?.wiki_summary_url])
 
   // Précharger la version de base (thumb prioritaire pour un affichage rapide)
   useEffect(() => {
@@ -554,26 +675,6 @@ export default function Home() {
       cancelled = true
     }
   }, [medium])
-
-  const targetArtist = art?.artist ?? ''
-  const artistSuggestions = useMemo(() => {
-    const map = new Map<string, string>()
-    const addName = (name?: string) => {
-      if (!name) return
-      const key = normalizeString(name)
-      if (!map.has(key)) map.set(key, name)
-    }
-    addName(targetArtist)
-    artistHints.forEach((hint) => addName(hint.name))
-    DEFAULT_ARTIST_SUGGESTIONS.forEach(addName)
-    return Array.from(map.values())
-  }, [targetArtist, artistHints])
-  const artistMeta = useMemo(() => {
-    const key = normalizeString(targetArtist || '')
-    return artistHints.find(
-      (hint) => normalizeString(hint.name || '') === key
-    )
-  }, [artistHints, targetArtist])
   const MIN_SUGGESTION_LENGTH = 2
   const MAX_SUGGESTIONS = 25
   const deferredGuess = useDeferredValue(guess)
@@ -747,9 +848,12 @@ export default function Home() {
             setCommunityStats(null)
             return
           }
-          const successCount = data.filter((row) => row.success).length
+          const successCount = data.filter((row) => normalizeSuccessFlag(row.success)).length
           const fastWins = data.filter(
-            (row) => row.success && typeof row.attempts === 'number' && (row.attempts ?? 0) <= 3
+            (row) =>
+              normalizeSuccessFlag(row.success) &&
+              typeof row.attempts === 'number' &&
+              (row.attempts ?? 0) <= 3
           ).length
           const successRate = Math.round((successCount / total) * 100)
           const fastRate = Math.round((fastWins / total) * 100)
@@ -803,7 +907,16 @@ export default function Home() {
       .filter(Boolean)
       .pop() || art.museum
   const fallbackIntro = `${art.title} is a painting by ${art.artist} from ${art.year}, currently exhibited at ${art.museum}.`
-  const infoParagraphs = wikiIntro.length ? wikiIntro : [fallbackIntro]
+  const paintingParagraphs = wikiIntro.length ? wikiIntro : [fallbackIntro]
+  const artistDetailParagraphs = artistWikiIntro.length ? artistWikiIntro : artistParagraphs
+  const fallbackArtistWikiUrl = art.artist
+    ? `https://en.wikipedia.org/wiki/${encodeURIComponent(
+        art.artist.replace(/\s+/g, '_')
+      )}`
+    : ''
+  const artistWikiHref =
+    (artistMeta as { wiki_summary_url?: string | null })?.wiki_summary_url ||
+    fallbackArtistWikiUrl
 
   const normalize = normalizeString
 
@@ -823,11 +936,21 @@ export default function Home() {
             const attemptNumber = attemptsHistory.length - idx
             return (
               <li key={`${entry.guess}-${idx}`} className="border-b border-gray-100 pb-2 last:border-b-0 last:pb-0">
-                <div className="flex items-center justify-between text-xs text-slate-600">
-                  <span className="truncate">
+                <div className="text-xs text-slate-600 flex items-center justify-between">
+                  <span
+                    className={`truncate ${
+                      entry.correct ? 'font-medium text-emerald-700' : ''
+                    }`}
+                  >
                     #{attemptNumber} {entry.guess}
                   </span>
-                  <span>{entry.correct ? '✓' : '–'}</span>
+                  <span
+                    className={`ml-2 whitespace-nowrap ${
+                      entry.correct ? 'text-emerald-600 font-semibold' : ''
+                    }`}
+                  >
+                    {entry.correct ? 'Exact match!' : '–'}
+                  </span>
                 </div>
                 {Array.isArray(entry.feedback) ? (
                   <div className="mt-1 text-[11px] text-gray-600 space-y-1">
@@ -858,144 +981,162 @@ export default function Home() {
     const rawGuess = typeof overrideGuess === 'string' ? overrideGuess : guess
     const trimmedGuess = rawGuess.trim()
     if (!trimmedGuess) return
-
-    const correctArtist = normalize(art.artist)
-    const artistLastName = normalize(
-      art.artist
-        .split(' ')
-        .filter(Boolean)
-        .pop() || ''
-    )
     const guessNorm = normalize(trimmedGuess)
-    const correct =
-      guessNorm === correctArtist ||
-      (!!artistLastName && guessNorm === artistLastName)
-
-    const feedbackDetails: FeedbackDetail[] = []
-    const artYearNumber = parseInt(art.year, 10)
-    const guessedProfile = await getArtistProfile(trimmedGuess)
-    const localGuessMeta = artistHints.find(
-      (hint) => normalize(hint.name) === guessNorm
-    )
-    const guessedArtistData = guessedProfile || localGuessMeta || null
-
-    const pushDetail = (label: string, value: string, status: FeedbackStatus) =>
-      feedbackDetails.push({ label, value, status })
-
-    if (correct) {
-      feedbackDetails.push({
-        label: 'Status',
-        value: 'Exact match!',
-        status: 'match',
-      })
-    } else {
-      const birth = guessedArtistData?.birth_year
-      const death = guessedArtistData?.death_year
-
-      if (birth) {
-        const aliveDuringPainting =
-          death && artYearNumber >= birth && artYearNumber <= death
-        pushDetail(
-          'Birth year',
-          String(birth),
-          aliveDuringPainting ? 'match' : 'info'
-        )
-      } else {
-        pushDetail('Birth year', '—', 'missing')
-      }
-
-      if (death) {
-        pushDetail(
-          'Death year',
-          String(death),
-          artYearNumber > death ? 'earlier' : 'info'
-        )
-      } else {
-        pushDetail('Death year', '—', 'missing')
-      }
-
-      if (birth && death) {
-        if (artYearNumber < birth) {
-          pushDetail('Era hint', '🔺 Try an older artist', 'earlier')
-        } else if (artYearNumber > death) {
-          pushDetail('Era hint', '🔻 Try a more recent artist', 'later')
-        } else {
-          pushDetail('Era hint', 'Within their lifetime', 'match')
-        }
-      }
-
-      const compareField = (
-        label: string,
-        actual?: string | null,
-        guessField?: string | null
-      ) => {
-        if (!guessField) {
-          pushDetail(label, '—', 'missing')
-          return
-        }
-        if (!actual || !artistMeta) {
-          pushDetail(label, guessField, 'info')
-          return
-        }
-        const match = normalize(actual) === normalize(guessField)
-        pushDetail(label, guessField, match ? 'match' : 'different')
-      }
-
-      compareField('Movement', artistMeta?.movement, guessedArtistData?.movement)
-      compareField('Country', artistMeta?.country, guessedArtistData?.country)
-
-      const guessPopularity = guessedArtistData?.popularity_score ?? null
-      const targetPopularity = artistMeta?.popularity_score ?? null
-      if (guessPopularity !== null && targetPopularity !== null) {
-        const delta = guessPopularity - targetPopularity
-        let popularityHint = ''
-        let tone: FeedbackStatus = 'info'
-        const threshold = 7
-        if (Math.abs(delta) <= threshold) {
-          popularityHint = 'Similar fame'
-          tone = 'match'
-        } else if (delta > threshold) {
-          popularityHint = 'Artist of the day is less famous'
-          tone = 'different'
-        } else {
-          popularityHint = 'Try a more famous artist'
-          tone = 'different'
-        }
-        pushDetail('Fame hint', popularityHint, tone)
-      } else {
-        pushDetail('Fame hint', '—', 'missing')
-      }
-
-      if (!guessedArtistData) {
-        pushDetail('Data', 'No reference yet for this artist.', 'info')
-      }
+    if (!allowedGuessSet.has(guessNorm)) {
+      setGuessError('Pick an artist from the suggestions.')
+      return
     }
+    if (submitLockRef.current) return
+    submitLockRef.current = true
 
-    setAttemptsHistory((prev) => [
-      ...prev,
-      {
-        guess: trimmedGuess,
-        correct,
-        feedback: feedbackDetails,
-      },
-    ])
+    try {
+      const correctArtist = normalize(art.artist)
+      const artistLastName = normalize(
+        art.artist
+          .split(' ')
+          .filter(Boolean)
+          .pop() || ''
+      )
+      const correct =
+        guessNorm === correctArtist ||
+        (!!artistLastName && guessNorm === artistLastName)
 
-    const nextAttemptCount = attemptsCount + 1
+      const feedbackDetails: FeedbackDetail[] = []
+      const artYearNumber = parseInt(art.year, 10)
+      const guessedProfile = await getArtistProfile(trimmedGuess)
+      const localGuessMeta = artistHints.find(
+        (hint) => normalize(hint.name) === guessNorm
+      )
+      const guessedArtistData = guessedProfile || localGuessMeta || null
 
-    if (correct) {
-      setSuccess(true)
-      setFinished(true)
-    } else if (nextAttemptCount >= maxAttempts) {
-      setFinished(true)
+      const pushDetail = (label: string, value: string, status: FeedbackStatus) =>
+        feedbackDetails.push({ label, value, status })
+
+      if (!correct) {
+        const birth = guessedArtistData?.birth_year
+        const death = guessedArtistData?.death_year
+
+        if (birth) {
+          const aliveDuringPainting =
+            death && artYearNumber >= birth && artYearNumber <= death
+          pushDetail(
+            'Birth year',
+            String(birth),
+            aliveDuringPainting ? 'match' : 'info'
+          )
+        } else {
+          pushDetail('Birth year', '—', 'missing')
+        }
+
+        if (death) {
+          pushDetail(
+            'Death year',
+            String(death),
+            artYearNumber > death ? 'earlier' : 'info'
+          )
+        } else {
+          pushDetail('Death year', '—', 'missing')
+        }
+
+        const artYearValid = Number.isFinite(artYearNumber)
+        if (artYearValid && (birth || death)) {
+          const birthYear = typeof birth === 'number' ? birth : null
+          const fallbackDeath =
+            birthYear !== null
+              ? Math.min(
+                  birthYear + ASSUMED_MAX_ARTIST_AGE,
+                  new Date().getUTCFullYear()
+                )
+              : null
+          const deathYear =
+            typeof death === 'number' ? death : fallbackDeath
+
+          if (birthYear !== null && artYearNumber < birthYear) {
+            pushDetail('Era hint', '🔻 Try an older artist', 'earlier')
+          } else if (deathYear !== null && artYearNumber > deathYear) {
+            pushDetail('Era hint', '🔺 Try a more recent artist', 'later')
+          } else {
+            pushDetail('Era hint', 'Within their lifetime', 'match')
+          }
+        }
+
+        const compareField = (
+          label: string,
+          actual?: string | null,
+          guessField?: string | null
+        ) => {
+          if (!guessField) {
+            pushDetail(label, '—', 'missing')
+            return
+          }
+          if (!actual || !artistMeta) {
+            pushDetail(label, guessField, 'info')
+            return
+          }
+          const match = normalize(actual) === normalize(guessField)
+          pushDetail(label, guessField, match ? 'match' : 'different')
+        }
+
+        compareField('Movement', artistMeta?.movement, guessedArtistData?.movement)
+        compareField('Country', artistMeta?.country, guessedArtistData?.country)
+
+        const guessPopularity = guessedArtistData?.popularity_score ?? null
+        const targetPopularity = artistMeta?.popularity_score ?? null
+        if (guessPopularity !== null && targetPopularity !== null) {
+          const delta = guessPopularity - targetPopularity
+          let popularityHint = ''
+          let tone: FeedbackStatus = 'info'
+          const threshold = 7
+          if (Math.abs(delta) <= threshold) {
+            popularityHint = 'Similar fame'
+            tone = 'match'
+          } else if (delta > threshold) {
+            popularityHint = 'Artist of the day is less famous'
+            tone = 'different'
+          } else {
+            popularityHint = 'Try a more famous artist'
+            tone = 'different'
+          }
+          pushDetail('Fame hint', popularityHint, tone)
+        } else {
+          pushDetail('Fame hint', '—', 'missing')
+        }
+
+        if (!guessedArtistData) {
+          pushDetail('Data', 'No reference yet for this artist.', 'info')
+        }
+      }
+
+      setAttemptsHistory((prev) => [
+        ...prev,
+        {
+          guess: trimmedGuess,
+          correct,
+          feedback: feedbackDetails,
+        },
+      ])
+
+      const nextAttemptCount = attemptsCount + 1
+
+      if (correct) {
+        setSuccess(true)
+        setFinished(true)
+      } else if (nextAttemptCount >= maxAttempts) {
+        setFinished(true)
+      }
+      setGuess('')
+      setSuggestionsOpen(false)
+      setGuessError(null)
+    } finally {
+      submitLockRef.current = false
     }
-    setGuess('')
-    setSuggestionsOpen(false)
   }
 
   const selectSuggestion = (name: string, submitAfter = false) => {
     setGuess(name)
     setSuggestionsOpen(false)
     setHighlightedSuggestion(0)
+    if (guessError) setGuessError(null)
     if (submitAfter) {
       setTimeout(() => {
         void handleSubmit(name)
@@ -1106,7 +1247,7 @@ export default function Home() {
       </div>
 
       {finished && (
-        <div className="mt-4 w-[320px] border border-gray-200 rounded-xl px-4 py-3 text-left text-xs text-gray-600">
+        <div className="mt-4 w-[320px] text-left text-xs text-gray-600">
           <p>
             Answer: {art.artist} – {art.title}
           </p>
@@ -1135,6 +1276,7 @@ export default function Home() {
               onChange={(e) => {
                 setGuess(e.target.value)
                 setSuggestionsOpen(true)
+                if (guessError) setGuessError(null)
               }}
               onKeyDown={(e) => {
                 if (showSuggestions && filteredSuggestions.length) {
@@ -1206,6 +1348,9 @@ export default function Home() {
               </ul>
             )}
           </div>
+          {guessError && (
+            <p className="w-full text-left text-xs text-rose-600">{guessError}</p>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -1299,25 +1444,53 @@ export default function Home() {
               </div>
             )}
           </div>
-          <div className="mt-4 w-full space-y-3 text-left">
-            {infoParagraphs.map((paragraph, idx) => (
-              <p
-                key={`${paragraph}-${idx}`}
-                className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm text-sm leading-relaxed text-slate-900"
-              >
-                {paragraph}
-              </p>
-            ))}
-            <p>
+          <div className="mt-4 w-full text-left space-y-3">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="space-y-2">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                  The artist
+                </p>
+                {artistDetailParagraphs.map((paragraph, idx) => (
+                  <p key={`artist-${idx}`} className="text-sm leading-relaxed text-slate-900">
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
+              <div className="border-t border-slate-100 pt-4 space-y-2">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                  The artwork
+                </p>
+                {paintingParagraphs.map((paragraph, idx) => (
+                  <p key={`artwork-${idx}`} className="text-sm leading-relaxed text-slate-900">
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
+            </div>
+            <p className="text-sm text-slate-500">
               Learn more on{' '}
+              {artistWikiHref ? (
+                <>
+                  <a
+                    href={artistWikiHref}
+                    target="_blank"
+                    className="text-slate-800 underline decoration-slate-300 hover:decoration-slate-800"
+                    rel="noreferrer"
+                  >
+                    the artist&apos;s page
+                  </a>
+                  {' '}or{' '}
+                </>
+              ) : null}
               <a
                 href={art.wiki_summary_url}
                 target="_blank"
-                className="text-blue-600 underline"
+                className="text-slate-800 underline decoration-slate-300 hover:decoration-slate-800"
                 rel="noreferrer"
               >
-                Wikipedia
-              </a>.
+                the artwork entry
+              </a>
+              .
             </p>
           </div>
           {renderAttempts('mt-6 w-full max-w-[360px] mx-auto')}
