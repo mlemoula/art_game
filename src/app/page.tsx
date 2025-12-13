@@ -926,6 +926,13 @@ export default function Home() {
     fallbackArtistWikiUrl
 
   const normalize = normalizeString
+  const usedGuessSet = useMemo(() => {
+    const set = new Set<string>()
+    attemptsHistory.forEach((attempt) => {
+      set.add(normalize(attempt.guess))
+    })
+    return set
+  }, [attemptsHistory])
 
   const renderAttempts = (
     containerClass = 'mt-6 w-full max-w-[360px]',
@@ -1012,6 +1019,10 @@ export default function Home() {
     const guessNorm = normalize(trimmedGuess)
     if (!allowedGuessSet.has(guessNorm)) {
       setGuessError('Pick an artist from the suggestions.')
+      return
+    }
+    if (usedGuessSet.has(guessNorm)) {
+      setGuessError('You already tried this artist.')
       return
     }
     if (submitLockRef.current) return
