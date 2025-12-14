@@ -56,6 +56,7 @@ interface DailyArt {
   year: string
   museum: string
   wiki_summary_url: string
+  wiki_artist_summary_url?: string | null
 }
 
 type FeedbackStatus = 'match' | 'earlier' | 'later' | 'different' | 'info' | 'missing'
@@ -95,7 +96,6 @@ const FEEDBACK_TONES: Record<FeedbackStatus, string> = {
   missing: 'text-gray-500',
 }
 
-const DEFAULT_ARTIST_SUGGESTIONS = FALLBACK_ARTISTS.map((artist) => artist.name)
 const MAX_WIKI_PARAGRAPHS = 4
 const ASSUMED_MAX_ARTIST_AGE = 85
 const normalizeSuccessFlag = (value: unknown): boolean => {
@@ -213,7 +213,6 @@ export default function Home() {
     }
     addName(targetArtist)
     artistHints.forEach((hint) => addName(hint.name))
-    DEFAULT_ARTIST_SUGGESTIONS.forEach(addName)
     return Array.from(map.values())
   }, [targetArtist, artistHints])
   const allowedGuessSet = useMemo(() => {
@@ -550,7 +549,8 @@ export default function Home() {
     let cancelled = false
     const fetchArtistWiki = async () => {
       const preferredUrl =
-        (artistMeta as { wiki_summary_url?: string | null })?.wiki_summary_url ||
+        artistMeta?.wiki_summary_url ||
+        art.wiki_artist_summary_url ||
         (art.artist
           ? `https://en.wikipedia.org/wiki/${encodeURIComponent(
               art.artist.replace(/\s+/g, '_')
@@ -583,7 +583,7 @@ export default function Home() {
     return () => {
       cancelled = true
     }
-  }, [art?.artist, artistMeta?.wiki_summary_url])
+  }, [art?.artist, artistMeta?.wiki_summary_url, art?.wiki_artist_summary_url])
 
   // Précharger la version de base (thumb prioritaire pour un affichage rapide)
   useEffect(() => {
@@ -1001,8 +1001,7 @@ export default function Home() {
       )}`
     : ''
   const artistWikiHref =
-    (artistMeta as { wiki_summary_url?: string | null })?.wiki_summary_url ||
-    fallbackArtistWikiUrl
+    artistMeta?.wiki_summary_url || art.wiki_artist_summary_url || fallbackArtistWikiUrl
 
   const renderAttempts = (
     containerClass = 'mt-6 w-full max-w-[360px]',

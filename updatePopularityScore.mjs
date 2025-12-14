@@ -1,5 +1,11 @@
 import fetch from 'node-fetch'
 import { createClient } from '@supabase/supabase-js'
+import {
+  fetchJson,
+  getEnglishWikiTitleFromId,
+  searchWikipediaTitle,
+  searchWikidataId,
+} from './lib/artistWikiHelper.js'
 
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -10,36 +16,7 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-const userAgent = '4rtW0rk-PopularityBot/1.0'
-
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-const fetchJson = async (url, init = {}) => {
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      'User-Agent': userAgent,
-      ...(init.headers || {}),
-    },
-  })
-  if (!res.ok) {
-    throw new Error(`Request failed (${res.status}) for ${url}`)
-  }
-  return res.json()
-}
-
-const searchWikipediaTitle = async (name) => {
-  try {
-    const data = await fetchJson(
-      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
-        name
-      )}&format=json`
-    )
-    return data?.query?.search?.[0]?.title || null
-  } catch {
-    return null
-  }
-}
 
 const fetchWikiExtractLength = async (title) => {
   if (!title) return 0
@@ -84,19 +61,6 @@ const fetchPageViews = async (title) => {
   }
 }
 
-const searchWikidataId = async (name) => {
-  try {
-    const data = await fetchJson(
-      `https://www.wikidata.org/w/api.php?action=wbsearchentities&language=en&format=json&limit=1&search=${encodeURIComponent(
-        name
-      )}`
-    )
-    return data?.search?.[0]?.id || null
-  } catch {
-    return null
-  }
-}
-
 const fetchSitelinkCount = async (wikidataId) => {
   if (!wikidataId) return 0
   try {
@@ -130,7 +94,19 @@ SELECT (COUNT(DISTINCT ?museum) AS ?count) WHERE {
   }
 }
 
+const KNOWN_MASTERS = new Set([
+  'raphael',
+  'michelangelo',
+  'leonardo da vinci',
+  'rembrandt',
+  'albrecht dürer',
+  'pablo picasso',
+  'vincent van gogh',
+  'claude monet',
+])
+
 const calculateScore = ({
+  artistName,
   hasWiki,
   extractLines,
   avgViews,
@@ -138,11 +114,12 @@ const calculateScore = ({
   sitelinks,
 }) => {
   let score = 0
-  if (hasWiki) score += 20
-  const extractBonus = Math.min(20, Math.log10(extractLines + 10) * 10)
-  const pageviewScore = Math.min(30, Math.log10(avgViews + 1) * 10)
-  const museumScore = Math.min(20, museumCount * 4)
-  const notorietyScore = Math.min(10, sitelinks / 5)
+  if (hasWiki) score += 15
+  if (KNOWN_MASTERS.has(artistName?.toLowerCase() || '')) score += 10
+  const extractBonus = Math.min(18, Math.log10(extractLines + 20) * 9)
+  const pageviewScore = Math.min(35, Math.log10(avgViews + 5) * 12)
+  const museumScore = Math.min(25, museumCount * 3.5)
+  const notorietyScore = Math.min(12, Math.log10(sitelinks + 1) * 5)
   score += extractBonus + pageviewScore + museumScore + notorietyScore
   return Math.round(Math.min(100, score))
 }
@@ -150,22 +127,34 @@ const calculateScore = ({
 const updatePopularityScores = async () => {
   const { data: artists, error } = await supabase
     .from('artists')
-    .select('id, name')
+    .select('id, name, wikidata_id')
     .is('popularity_score', null)
 
   if (error) throw error
 
+  if (!artists || artists.length === 0) {
+    console.log('All artists already have a popularity score.')
+    return
+  }
+
   for (const artist of artists) {
     await delay(250)
-    const wikipediaTitle = await searchWikipediaTitle(artist.name)
-    const extractLines = await fetchWikiExtractLength(wikipediaTitle)
-    const avgViews = await fetchPageViews(wikipediaTitle)
-    const wikidataId = await searchWikidataId(artist.name)
+    let { wikidata_id: wikidataId } = artist
+    if (!wikidataId) {
+      wikidataId = await searchWikidataId(artist.name)
+    }
+    console.log(`artist ${artist.name} -> wikidata ${wikidataId || 'missing'}`)
+    const canonicalTitle =
+      (await getEnglishWikiTitleFromId(wikidataId)) ||
+      (await searchWikipediaTitle(artist.name))
+    const extractLines = await fetchWikiExtractLength(canonicalTitle)
+    const avgViews = await fetchPageViews(canonicalTitle)
     const sitelinks = await fetchSitelinkCount(wikidataId)
     const museumCount = await fetchMuseumPresence(wikidataId)
 
     const score = calculateScore({
-      hasWiki: Boolean(wikipediaTitle),
+      artistName: artist.name,
+      hasWiki: Boolean(canonicalTitle),
       extractLines,
       avgViews,
       museumCount,
@@ -173,7 +162,7 @@ const updatePopularityScores = async () => {
     })
 
     console.log(
-      `${artist.name} -> score ${score} (wiki:${wikipediaTitle || 'none'} views:${avgViews.toFixed(
+      `${artist.name} -> score ${score} (wiki:${canonicalTitle || 'none'} views:${avgViews.toFixed(
         1
       )} museums:${museumCount} sitelinks:${sitelinks})`
     )

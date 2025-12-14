@@ -34,11 +34,14 @@ export async function GET(request: NextRequest) {
     .from('daily_art')
     .select('*')
     .eq('date', targetStr)
-    .single()
+    .maybeSingle()
 
   if (error) {
     const status = error.code === 'PGRST116' ? 404 : 500
     return NextResponse.json({ error: error.message }, { status })
+  }
+  if (!data) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
   return NextResponse.json(data)
 }

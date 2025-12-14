@@ -5,6 +5,12 @@ import fs from 'fs'
 import fetch from 'node-fetch'
 import { parse } from 'csv-parse/sync'
 import { stringify } from 'csv-stringify/sync'
+import {
+  normalizeName,
+  normalizeImageKey,
+  resolveArtistWikiSummaryUrl,
+  searchWikidataId,
+} from './lib/artistWikiHelper.js'
 
 // -------------------------------
 // Config
@@ -16,7 +22,8 @@ const TARGET_COUNT = 200
 
 // Fame threshold for “very known artists”
 const FAME_THRESHOLD = 92
-const ENFORCE_EXISTING_DEDUP = true
+//if false : ignore ce qui a déjà été généré = n'évite pas le doublonnage d'œuvres
+const ENFORCE_EXISTING_DEDUP = false
 
 // -------------------------------
 // Utils
@@ -29,12 +36,34 @@ const wikidataAPI = (query) =>
     query
   )}`
 
-const wikidataCache = new Map()
 const imageProbeCache = new Map()
 
-const normalizeName = (name = '') => name.trim().toLowerCase()
-const normalizeImageKey = (url = '') =>
-  url.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')
+const ARTIST_WIKI_SEARCH_DELAY = 150
+
+const writeArtistsCsv = (entries, fieldnames) => {
+  const csv = stringify(entries, {
+    header: true,
+    columns: fieldnames,
+  })
+  fs.writeFileSync(ARTISTS_CSV, csv)
+}
+
+const fillMissingArtistWikiUrls = async (entries, options = {}) => {
+  const { fieldnames, writeCsv = false } = options
+  let modified = false
+  for (const entry of entries) {
+    if (hasHttpUrl(entry.wiki_artist_summary_url)) continue
+    const wikiUrl = await resolveArtistWikiSummaryUrl(entry.name)
+    if (wikiUrl) {
+      entry.wiki_artist_summary_url = wikiUrl
+      modified = true
+    }
+    await wait(ARTIST_WIKI_SEARCH_DELAY)
+  }
+  if (modified && writeCsv && fieldnames?.length) {
+    writeArtistsCsv(entries, fieldnames)
+  }
+}
 
 // Transform Wikimedia file URL to full-res
 function toFullImage(url) {
@@ -87,71 +116,59 @@ LIMIT ${limit}
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-async function fetchWikidataIdForName(name) {
-  const normalized = name.trim().toLowerCase()
-  if (wikidataCache.has(normalized)) return wikidataCache.get(normalized)
-
-  const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&language=en&format=json&limit=1&search=${encodeURIComponent(
-    name
-  )}`
-  const response = await fetch(searchUrl, {
-    headers: { 'User-Agent': 'Daily-Art-Generator/1.0' },
-  })
-  if (!response.ok) {
-    wikidataCache.set(normalized, null)
-    return null
-  }
-  const json = await response.json()
-  const bestMatch = json?.search?.[0] || null
-  const id = bestMatch?.id || null
-  if (id) {
-    const label =
-      bestMatch.display?.label ||
-      bestMatch.label ||
-      bestMatch.match?.text ||
-      name
-    const description =
-      bestMatch.display?.description || bestMatch.description || ''
-    console.log(
-      `   Wikidata lookup → ${label} (${id})${
-        description ? ` – ${description}` : ''
-      }`
-    )
-  } else {
-    console.warn(`   Wikidata lookup failed for "${name}"`)
-  }
-  wikidataCache.set(normalized, id)
-  return id
-}
-
 // -------------------------------
 // Load Artists from Supabase (fallback to CSV)
 // -------------------------------
 
+async function fetchArtistsFromSupabase(includeWikiSummary = true) {
+  const selectFields = includeWikiSummary
+    ? 'name,popularity_score,wiki_summary_url,wikidata_id'
+    : 'name,popularity_score,wikidata_id'
+  const restUrl = `${SUPABASE_URL}/rest/v1/artists?select=${selectFields}&order=name.asc`
+  const response = await fetch(restUrl, {
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  })
+  if (!response.ok) {
+    const body = await response.text()
+    if (
+      includeWikiSummary &&
+      body?.includes('wiki_summary_url') &&
+      (body.includes('does not exist') || body.includes('column'))
+    ) {
+      return fetchArtistsFromSupabase(false)
+    }
+    throw new Error(`Failed to load artists from Supabase: ${response.status} – ${body}`)
+  }
+  const rawEntries = await response.json()
+  const normalized = rawEntries.map((entry) => ({
+    name: entry.name,
+    fame_index: Number(entry.popularity_score ?? 0),
+    wikidata_id: entry.wikidata_id || null,
+    wiki_artist_summary_url: includeWikiSummary ? entry.wiki_summary_url || null : null,
+  }))
+  await fillMissingArtistWikiUrls(normalized)
+  const artistSet = new Set(normalized.map((a) => normalizeName(a.name)))
+  return { entries: normalized, artistSet }
+}
+
 async function loadArtists() {
   if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-    const restUrl = `${SUPABASE_URL}/rest/v1/artists?select=name,popularity_score&order=name.asc`
-    const response = await fetch(restUrl, {
-      headers: {
-        apikey: SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      },
-    })
-    if (!response.ok) {
-      const body = await response.text()
-      throw new Error(`Failed to load artists from Supabase: ${response.status} – ${body}`)
-    }
-    const rawEntries = await response.json()
-    const normalized = rawEntries.map((entry) => ({
-      name: entry.name,
-      fame_index: Number(entry.popularity_score ?? 0),
-      wikidata_id: entry.wikidata_id || null,
-    }))
-    const artistSet = new Set(normalized.map((a) => normalizeName(a.name)))
-    return { entries: normalized, artistSet }
+    return fetchArtistsFromSupabase()
   }
 
   const raw = fs.readFileSync(ARTISTS_CSV, 'utf8')
+  const lines = raw.split(/\r?\n/)
+  const headerLine = lines[0] || ''
+  const fieldnames = headerLine
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+  if (!fieldnames.includes('wiki_artist_summary_url')) {
+    fieldnames.push('wiki_artist_summary_url')
+  }
   const entries = parse(raw, {
     columns: true,
     skip_empty_lines: true,
@@ -161,7 +178,12 @@ async function loadArtists() {
     name: entry.name,
     fame_index: Number(entry.fame_index || entry.popularity_score || 0),
     wikidata_id: entry.wikidata_id || null,
+    wiki_artist_summary_url: entry.wiki_summary_url || null,
   }))
+  await fillMissingArtistWikiUrls(normalizedEntries, {
+    writeCsv: true,
+    fieldnames,
+  })
   const artistSet = new Set(normalizedEntries.map((a) => normalizeName(a.name)))
   return { entries: normalizedEntries, artistSet }
 }
@@ -323,7 +345,7 @@ async function generate() {
 
     console.log(`→ Fetching artworks for ${artist.name}`)
     if (!artist.wikidata_id) {
-      artist.wikidata_id = await fetchWikidataIdForName(artist.name)
+      artist.wikidata_id = await searchWikidataId(artist.name)
       if (!artist.wikidata_id) {
         console.warn(`   No Wikidata ID found for ${artist.name}, skipping.`)
         continue
@@ -367,6 +389,7 @@ async function generate() {
       year: chosen.year || '',
       museum: chosen.museum || '',
       wiki_summary_url: chosen.wiki_summary_url,
+      wiki_artist_summary_url: artist.wiki_artist_summary_url,
       meta_json: chosen.meta_json,
     }
 
