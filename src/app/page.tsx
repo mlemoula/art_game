@@ -1780,7 +1780,9 @@ export default function Home() {
               className="w-full border border-gray-300 text-gray-600 rounded-full px-4 py-2 text-xs tracking-[0.25em] button-hover disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {loadingPreviousPuzzle
-                ? 'Loading yesterday…'
+                ? isViewingPreviousPuzzle
+                  ? 'Loading today…'
+                  : 'Loading yesterday…'
                 : isViewingPreviousPuzzle
                 ? "Back to today's puzzle"
                 : "Try yesterday's puzzle"}

@@ -23,7 +23,7 @@ const TARGET_COUNT = 200
 // Fame threshold for “very known artists”
 const FAME_THRESHOLD = 92
 //if false : ignore ce qui a déjà été généré = n'évite pas le doublonnage d'œuvres
-const ENFORCE_EXISTING_DEDUP = false
+const ENFORCE_EXISTING_DEDUP = true
 
 // -------------------------------
 // Utils
