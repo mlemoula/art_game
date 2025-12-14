@@ -199,6 +199,7 @@ export default function Home() {
   const [gaveUp, setGaveUp] = useState(false)
   const [attemptsOpen, setAttemptsOpen] = useState(false)
   const [loadingPreviousPuzzle, setLoadingPreviousPuzzle] = useState(false)
+  const [viewingOffset, setViewingOffset] = useState(0)
   const maxAttempts = 5
   const inputRef = useRef<HTMLInputElement | null>(null)
   const blurTimeoutRef = useRef<number | null>(null)
@@ -274,13 +275,26 @@ export default function Home() {
     const loadArt = async () => {
       try {
         const params = new URLSearchParams()
+        let offsetValue = 0
         if (typeof window !== 'undefined') {
           const currentParams = new URLSearchParams(window.location.search)
           const offset = currentParams.get('offset')
           const date = currentParams.get('date')
-          if (offset) params.set('offset', offset)
-          if (date) params.set('date', date)
+          if (offset) {
+            params.set('offset', offset)
+            const parsed = Number(offset)
+            if (!Number.isNaN(parsed)) offsetValue = parsed
+          }
+          if (date) {
+            params.set('date', date)
+            if (!offset) {
+              const todayKey = extractDayKey(new Date().toISOString())
+              const dayDiff = diffDays(date, todayKey)
+              if (!Number.isNaN(dayDiff)) offsetValue = dayDiff
+            }
+          }
         }
+        setViewingOffset(offsetValue)
         await requestArtFromApi(params, controller.signal)
       } catch (error) {
         if ((error as Error)?.name === 'AbortError') return
@@ -781,6 +795,7 @@ export default function Home() {
     persistPlay()
   }, [finished, artId, userToken, playSaved, attemptsHistory, success])
 
+  const isViewingPreviousPuzzle = viewingOffset < 0
   const shareGlyphs = useMemo(() => {
     const tokens = Array.from({ length: maxAttempts }, (_, idx) => {
       const attempt = attemptsHistory[idx]
@@ -843,8 +858,10 @@ export default function Home() {
     setLoadingPreviousPuzzle(true)
     try {
       const params = new URLSearchParams()
-      params.set('offset', '-1')
+      const targetOffset = viewingOffset < 0 ? 0 : -1
+      params.set('offset', String(targetOffset))
       await requestArtFromApi(params)
+      setViewingOffset(targetOffset)
     } catch (error) {
       console.error('Unable to load previous puzzle', error)
     } finally {
@@ -1762,7 +1779,11 @@ export default function Home() {
               disabled={loadingPreviousPuzzle}
               className="w-full border border-gray-300 text-gray-600 rounded-full px-4 py-2 text-xs tracking-[0.25em] button-hover disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {loadingPreviousPuzzle ? 'Loading yesterday…' : "Try yesterday's puzzle"}
+              {loadingPreviousPuzzle
+                ? 'Loading yesterday…'
+                : isViewingPreviousPuzzle
+                ? "Back to today's puzzle"
+                : "Try yesterday's puzzle"}
             </button>
             {shareMessage && <p className="text-[10px] text-gray-500">{shareMessage}</p>}
             <div className="pt-3 border-t border-gray-100 space-y-3">
