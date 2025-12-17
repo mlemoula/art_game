@@ -254,6 +254,23 @@ export default function Home() {
     return [sentences.join(' ')]
   }, [art?.artist, artistMeta])
 
+  const suggestionPopularityMap = useMemo(() => {
+    const map = new Map<string, number | null>()
+    const addEntry = (name?: string | null, score?: number | null) => {
+      if (!name) return
+      const key = normalizeString(name)
+      if (!key) return
+      const existing = map.get(key)
+      const normalizedScore = score ?? null
+      if (existing === undefined || normalizedScore !== null) {
+        map.set(key, normalizedScore)
+      }
+    }
+    addEntry(targetArtist, artistMeta?.popularity_score ?? null)
+    artistHints.forEach((hint) => addEntry(hint.name, hint.popularity_score ?? null))
+    return map
+  }, [artistHints, artistMeta, targetArtist])
+
   const requestArtFromApi = useCallback(
     async (params: URLSearchParams, signal?: AbortSignal) => {
       const query = params.toString()
@@ -708,15 +725,26 @@ export default function Home() {
   const filteredSuggestions = useMemo(() => {
     if (deferredGuess.trim().length < MIN_SUGGESTION_LENGTH) return []
     const needle = normalizeString(deferredGuess.trim())
-    const results: string[] = []
+    const matches: string[] = []
     for (const name of artistSuggestions) {
       if (normalizeString(name).includes(needle)) {
-        results.push(name)
+        matches.push(name)
       }
-      if (results.length >= MAX_SUGGESTIONS) break
     }
-    return results
-  }, [artistSuggestions, deferredGuess])
+    matches.sort((a, b) => {
+      const keyA = normalizeString(a)
+      const keyB = normalizeString(b)
+      const popA = suggestionPopularityMap.get(keyA) ?? null
+      const popB = suggestionPopularityMap.get(keyB) ?? null
+      if (popA !== popB) {
+        if (popA === null) return 1
+        if (popB === null) return -1
+        return popB - popA
+      }
+      return a.localeCompare(b, undefined, { sensitivity: 'base' })
+    })
+    return matches.slice(0, MAX_SUGGESTIONS)
+  }, [artistSuggestions, deferredGuess, suggestionPopularityMap])
   useEffect(() => {
     setHighlightedSuggestion(0)
   }, [deferredGuess, filteredSuggestions.length])
