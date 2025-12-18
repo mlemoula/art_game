@@ -72,19 +72,18 @@ export default function ZoomableImage({
   useEffect(() => {
     if (typeof window === 'undefined') return
     const computeSize = () => {
+      const visualViewport = window.visualViewport
+      if (visualViewport && visualViewport.scale !== 1) {
+        return
+      }
       const nextWidth = Math.min(width, window.innerWidth - 32)
       const nextHeight = Math.max(320, Math.round(window.innerHeight * 0.75))
       const orientation =
         window.innerWidth < window.innerHeight ? 'portrait' : 'landscape'
       const prev = viewportRef.current
       const widthDiff = Math.abs(prev.width - nextWidth)
-      const heightDiff = Math.abs(prev.height - nextHeight)
       const orientationChanged = prev.orientation !== orientation
-      if (
-        widthDiff > 8 ||
-        heightDiff > 60 ||
-        orientationChanged
-      ) {
+      if (widthDiff > 8 || orientationChanged) {
         viewportRef.current = {
           width: nextWidth,
           height: nextHeight,
