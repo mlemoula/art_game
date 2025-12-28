@@ -17,6 +17,9 @@ const nextConfig: NextConfig = {
       {
         pathname: '/api/image/**',
       },
+      {
+        pathname: '/generated-artworks/**',
+      },
     ],
   },
 };
