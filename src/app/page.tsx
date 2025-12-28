@@ -10,6 +10,7 @@ import {
 } from '@/utils/getArtistRecommendations'
 import { supabase } from '@/lib/supabaseClient'
 import { getProxiedImageUrl } from '@/utils/getProxiedImageUrl'
+import generatedArtImages from '@/data/generatedArtImages.json'
 
 const normalizeString = (str: string) =>
   str
@@ -57,6 +58,7 @@ interface DailyArt {
   year: string
   museum: string
   wiki_summary_url: string
+  cached_image_url?: string | null
   wiki_artist_summary_url?: string | null
 }
 
@@ -324,6 +326,10 @@ export default function Home() {
     return () => controller.abort()
   }, [requestArtFromApi])
 
+  const generatedArtImageCache = generatedArtImages as Record<string, string>
+  const cachedArtSrc =
+    art?.cached_image_url ||
+    (art ? generatedArtImageCache[art.image_url] ?? '' : '')
   const mediaUrls = art
     ? getWikimediaUrls(art.image_url)
     : { thumb: '', medium: '', hd: '' }
@@ -762,9 +768,17 @@ export default function Home() {
   })()
   const mediumCandidate = medium || baseSrc
   const wideCandidate = thumb || mediumCandidate
+  const buildCandidates = (...items: Array<string | undefined>) =>
+    Array.from(
+      new Set(items.filter((value): value is string => Boolean(value)))
+    )
+
+  const isGeneratedCache = (value: string | null | undefined) =>
+    typeof value === 'string' && value.startsWith('/generated-artworks/')
 
   const isSrcReady = (candidate: string | null | undefined) => {
     if (!candidate) return false
+    if (candidate === cachedArtSrc || isGeneratedCache(candidate)) return true
     if (candidate === hd) return hdLoaded
     if (candidate === medium) return mediumLoaded
     if (candidate === mediumCandidate) return mediumLoaded
@@ -772,9 +786,15 @@ export default function Home() {
   }
 
   const tierCandidates: Record<QualityTier, string[]> = {
-    detail: [hd, medium, baseSrc],
-    medium: [hd, mediumCandidate, baseSrc],
-    wide: [hd, mediumCandidate, wideCandidate, baseSrc],
+    detail: buildCandidates(cachedArtSrc, hd, mediumCandidate, baseSrc),
+    medium: buildCandidates(cachedArtSrc, hd, mediumCandidate, baseSrc),
+    wide: buildCandidates(
+      cachedArtSrc,
+      hd,
+      mediumCandidate,
+      wideCandidate,
+      baseSrc
+    ),
   }
 
   const selectSrcForTier = (tier: QualityTier) => {
@@ -788,16 +808,14 @@ export default function Home() {
   }
   const displaySrc = selectSrcForTier(qualityTier)
   const PROXY_TARGET_WIDTH = 1400
-  const proxiedDisplaySrc = displaySrc
+  const displayNeedsProxy = Boolean(
+    displaySrc && /^https?:\/\//i.test(displaySrc)
+  )
+  const proxiedDisplaySrc = displayNeedsProxy
     ? getProxiedImageUrl(displaySrc, PROXY_TARGET_WIDTH)
-    : ''
+    : displaySrc
   const displayAttempts = finished ? maxAttempts : attemptsCount
-  const srcReady = (() => {
-    if (!displaySrc) return false
-    if (displaySrc === hd) return hdLoaded
-    if (displaySrc === medium) return mediumLoaded
-    return imageReady
-  })()
+  const srcReady = Boolean(displaySrc && isSrcReady(displaySrc))
   const isDisplayReady = Boolean(displaySrc && srcReady)
 
   useEffect(() => {

@@ -16,6 +16,31 @@ Minimalist daily one minute art guessing game powered by Next.js and Supabase.
 2. Run `node generate_daily_art.js` (script skips rows missing image/year/museum and artists absent from `artists_rows.csv`).
 3. Import the new `artworks_generated.csv` into Supabase, scheduling dates for the next 100+ days.
 
+## Caching generated artwork images
+
+After you generate a new `artworks_generated.csv` (or whenever Supabase has new rows), run the cache helper so the UI can load a lightweight WebP from your own origin:
+
+1. In Supabase add the cache columns (once):
+
+```sql
+ALTER TABLE public.daily_art
+  ADD COLUMN IF NOT EXISTS cached_image_url TEXT,
+  ADD COLUMN IF NOT EXISTS cached_image_generated_at TIMESTAMPTZ;
+```
+
+2. Install the dependencies if you haven’t already and run the generator with your service role key. The script now queries Supabase for any rows where `cached_image_url` is `NULL`, so it only reprocesses the missing artwork entries:
+
+```
+npm install
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+npm run generate:image-cache
+```
+
+That downloads every `image_url`, converts it to `/public/generated-artworks/<hash>.webp`, updates `daily_art.cached_image_url`, and enriches `src/data/generatedArtImages.json`. The frontend prefers `cached_image_url` and falls back to the JSON map if needed.
+
+3. Repeat step 2 whenever you refresh the CSV so the cache (and Supabase column) stays in sync—nothing else is required on the UI side.
+
 ## Next ideas
 - Add an admin view listing upcoming artworks.
 - Surface player stats (win rate, streak) in UI.
@@ -60,54 +85,3 @@ LIMIT 50;
 
 1. Add artists manually in Supabase (`public.artists`). Leave `popularity_score` NULL.
 2. Run the helper script to pull Wikipedia summaries and assign scores based on line counts.
-
-Create `scripts/updatePopularityScore.mjs`:
-
-```js
-import fetch from 'node-fetch'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
-
-const fetchWikiLines = async (name) => {
-  const searchRes = await fetch(
-    `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(name)}&format=json`
-  ).then((r) => r.json())
-  const first = searchRes?.query?.search?.[0]
-  if (!first) return 0
-  const summary = await fetch(
-    `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(first.title)}`
-  ).then((r) => r.json())
-  const text = summary?.extract || ''
-  return text.split(/\r?\n/).filter(Boolean).length
-}
-
-const run = async () => {
-  const { data: artists, error } = await supabase
-    .from('artists')
-    .select('id, name')
-  if (error) throw error
-
-  for (const artist of artists) {
-    const score = await fetchWikiLines(artist.name)
-    console.log(`Score ${score} for ${artist.name}`)
-    await supabase
-      .from('artists')
-      .update({ popularity_score: score })
-      .eq('id', artist.id)
-  }
-}
-
-run().then(() => console.log('Done')).catch(console.error)
-```
-
-Then run locally:
-
-```bash
-SUPABASE_URL=... \
-SUPABASE_SERVICE_ROLE_KEY=... \
-node scripts/updatePopularityScore.mjs
-```

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "generate:image-cache": "node scripts/buildArtworkWebpCache.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.86.0",
