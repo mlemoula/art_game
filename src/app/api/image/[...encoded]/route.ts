@@ -109,11 +109,11 @@ export async function GET(
       transformer = transformer.resize({ width, withoutEnlargement: true })
     }
     const output = await transformer.toBuffer()
-    const buffer = output.buffer.slice(
+    const responseBuffer = output.buffer.slice(
       output.byteOffset,
       output.byteOffset + output.byteLength
     )
-    return new NextResponse(buffer, {
+    return new NextResponse(responseBuffer, {
       headers: {
         'Content-Type': 'image/webp',
         'Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400',
