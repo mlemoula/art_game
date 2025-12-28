@@ -259,8 +259,8 @@ function fillFromMeta(artwork) {
       artwork.year = meta.inception.value.substring(0, 4)
     if (!artwork.wiki_summary_url && meta.article?.value)
       artwork.wiki_summary_url = meta.article.value
-  } catch (err) {
-    console.warn('⚠️  Invalid meta_json, cannot enrich artwork')
+  } catch (error) {
+    console.warn('⚠️  Invalid meta_json, cannot enrich artwork', error)
   }
   return artwork
 }

@@ -1,11 +1,12 @@
 'use client'
-import { useEffect, useRef, useState, type SyntheticEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
+
+const MotionImage = motion(Image)
 
 interface Props {
   src: string
-  srcSet?: string
-  sizes?: string
   width: number
   height: number
   attempts: number
@@ -15,11 +16,12 @@ interface Props {
   fit?: 'cover' | 'contain'
   lockWidthToImage?: boolean
   revealProgress?: number
+  sizes?: string
+  alt?: string
 }
 
 export default function ZoomableImage({
   src,
-  srcSet,
   sizes = '(max-width: 640px) 90vw, 400px',
   width,
   height,
@@ -30,6 +32,7 @@ export default function ZoomableImage({
   fit = 'cover',
   lockWidthToImage = false,
   revealProgress = 0,
+  alt = 'Artwork preview',
 }: Props) {
   // Zoom : 0 essais -> zoom max (≈4.6x), maxAttempts -> 1x
   const safeMaxAttempts = Math.max(maxAttempts, 1)
@@ -98,10 +101,12 @@ export default function ZoomableImage({
     return () => window.removeEventListener('resize', computeSize)
   }, [width, height])
 
-  const handleLoad = (event: SyntheticEvent<HTMLImageElement>) => {
-    const img = event.currentTarget
-    if (img.naturalWidth && img.naturalHeight) {
-      setNaturalRatio(img.naturalWidth / img.naturalHeight)
+  const handleLoadingComplete = (result: {
+    naturalWidth?: number
+    naturalHeight?: number
+  }) => {
+    if (result.naturalWidth && result.naturalHeight) {
+      setNaturalRatio(result.naturalWidth / result.naturalHeight)
     }
   }
 
@@ -156,15 +161,17 @@ export default function ZoomableImage({
         WebkitTouchCallout: 'none',
       }}
     >
-      <motion.img
+      <MotionImage
         src={src}
-        srcSet={srcSet}
-        sizes={srcSet ? sizes : undefined}
-        loading="eager"
+        sizes={sizes}
+        width={width}
+        height={height}
+        priority
         fetchPriority="high"
-        decoding="async"
-        onLoad={handleLoad}
+        quality={85}
         draggable={false}
+        onLoadingComplete={handleLoadingComplete}
+        alt={alt}
         style={{
           width: '100%',
           height: '100%',

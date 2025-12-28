@@ -9,6 +9,7 @@ import {
   type ArtistRecommendation,
 } from '@/utils/getArtistRecommendations'
 import { supabase } from '@/lib/supabaseClient'
+import { getProxiedImageUrl } from '@/utils/getProxiedImageUrl'
 
 const normalizeString = (str: string) =>
   str
@@ -750,14 +751,6 @@ export default function Home() {
   }, [deferredGuess, filteredSuggestions.length])
   const showSuggestions = suggestionsOpen && filteredSuggestions.length > 0
 
-  const imageSrcSet = useMemo(() => {
-    const entries = [
-      thumb && `${thumb} 480w`,
-      medium && `${medium} 900w`,
-      hd && `${hd} 1600w`,
-    ].filter(Boolean)
-    return entries.length ? entries.join(', ') : undefined
-  }, [thumb, medium, hd])
   const safeMaxAttempts = Math.max(maxAttempts, 1)
   const zoomProgress = finished ? 1 : attemptsCount / safeMaxAttempts
   type QualityTier = 'detail' | 'medium' | 'wide'
@@ -767,32 +760,37 @@ export default function Home() {
     if (zoomProgress < 0.75) return 'medium'
     return 'wide'
   })()
-  const detailCandidate = hd || medium || baseSrc
   const mediumCandidate = medium || baseSrc
   const wideCandidate = thumb || mediumCandidate
 
+  const isSrcReady = (candidate: string | null | undefined) => {
+    if (!candidate) return false
+    if (candidate === hd) return hdLoaded
+    if (candidate === medium) return mediumLoaded
+    if (candidate === mediumCandidate) return mediumLoaded
+    return imageReady
+  }
+
+  const tierCandidates: Record<QualityTier, string[]> = {
+    detail: [hd, medium, baseSrc],
+    medium: [hd, mediumCandidate, baseSrc],
+    wide: [hd, mediumCandidate, wideCandidate, baseSrc],
+  }
+
   const selectSrcForTier = (tier: QualityTier) => {
-    if (tier === 'detail') {
-      if (hdLoaded && hd) return hd
-      if (mediumLoaded && medium) return medium
-      if (imageReady) return baseSrc
-      return ''
+    const candidates = tierCandidates[tier]
+    for (const candidate of candidates) {
+      if (isSrcReady(candidate)) {
+        return candidate
+      }
     }
-    if (tier === 'medium') {
-      if (mediumLoaded && mediumCandidate) return mediumCandidate
-      if (imageReady) return baseSrc
-      if (hdLoaded && detailCandidate) return detailCandidate
-      return ''
-    }
-    if (mediumLoaded && wideCandidate) return wideCandidate
-    if (imageReady) return baseSrc
     return ''
   }
   const displaySrc = selectSrcForTier(qualityTier)
-  const displaySrcSet =
-    qualityTier === 'detail' && hdLoaded && displaySrc === hd
-      ? imageSrcSet
-      : undefined
+  const PROXY_TARGET_WIDTH = 1400
+  const proxiedDisplaySrc = displaySrc
+    ? getProxiedImageUrl(displaySrc, PROXY_TARGET_WIDTH)
+    : ''
   const displayAttempts = finished ? maxAttempts : attemptsCount
   const srcReady = (() => {
     if (!displaySrc) return false
@@ -1021,7 +1019,7 @@ export default function Home() {
       set.add(normalize(attempt.guess))
     })
     return set
-  }, [attemptsHistory])
+  }, [attemptsHistory, normalize])
 
   if (!art) {
     return (
@@ -1335,7 +1333,6 @@ export default function Home() {
   }
 
   const placeholderText = 'Who painted this?'
-  const attemptsUsed = attemptsHistory.length
   const outcomeLabel = finished ? (success ? 'Congrats !' : 'Not this time') : ''
   const outcomeSubline = finished
     ? success
@@ -1580,9 +1577,8 @@ export default function Home() {
         <div className={frameInnerClass}>
           {isDisplayReady && displaySrc ? (
             <ZoomableImage
-              key={displaySrc}
-              src={displaySrc}
-              srcSet={displaySrcSet}
+              key={proxiedDisplaySrc || displaySrc}
+              src={proxiedDisplaySrc || displaySrc}
               width={400}
               height={300}
               attempts={displayAttempts}
@@ -1592,6 +1588,7 @@ export default function Home() {
               fit={showFullImage ? 'contain' : 'cover'}
               lockWidthToImage={finished || showFullImage}
               revealProgress={revealProgress}
+              alt={art ? `${art.title} par ${art.artist}` : 'Artwork du jour'}
             />
           ) : (
             <div className="w-full aspect-[4/3] flex items-center justify-center text-gray-500 text-xs tracking-wide bg-gray-50">
