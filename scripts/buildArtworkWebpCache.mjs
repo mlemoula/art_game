@@ -99,18 +99,14 @@ const build = async () => {
       let converted
       try {
         converted = await sharp(sourceBuffer).webp({ quality: 85 }).toBuffer()
-      } catch (sharpError) {
-        if (
-          /exceeds pixel limit/i.test(
-            sharpError?.message || ''
-          )
-        ) {
+      } catch {
+        try {
           converted = await sharp(sourceBuffer)
-            .resize({ width: 4000, height: 4000, fit: 'inside' })
+            .resize({ width: 4000, height: 4000, fit: 'inside', withoutEnlargement: true })
             .webp({ quality: 85 })
             .toBuffer()
-        } else {
-          throw sharpError
+        } catch (retryError) {
+          throw retryError
         }
       }
       const publicUrl = await uploadToStorage(hash, converted)
