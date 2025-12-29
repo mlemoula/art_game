@@ -37,7 +37,7 @@ SUPABASE_SERVICE_ROLE_KEY=...
 npm run generate:image-cache
 ```
 
-That downloads each `image_url`, converts it to WebP, uploads it into your bucket, updates `daily_art.cached_image_url`, and enriches `src/data/generatedArtImages.json`. The frontend now prefers `cached_image_url`, so once the bucket is populated the app serves those assets directly without hitting Wikimedia.
+That downloads each `image_url`, converts it to WebP, uploads it into your bucket, updates `daily_art.cached_image_url`, and enriches `src/data/generatedArtImages.json`. The script orders the rows by `date` ascending, so the cache fills chronologically, and the frontend now prefers `cached_image_url`, meaning production serves the stored assets rather than calling Wikimedia.
 
 3. Repeat step 2 whenever you refresh the CSV so the cache stays in sync. Because the script filters on `cached_image_url IS NULL`, subsequent runs finish quickly and only pick up work that still needs to be done.
 

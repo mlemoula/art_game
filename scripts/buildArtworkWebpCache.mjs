@@ -55,6 +55,7 @@ const fetchPendingArtworks = async () => {
     .select('id, date, image_url')
     .is('cached_image_url', null)
     .not('image_url', 'is', null)
+    .order('date', { ascending: true })
 
   if (error) {
     throw error
