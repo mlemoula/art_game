@@ -18,6 +18,7 @@ interface Props {
   revealProgress?: number
   sizes?: string
   alt?: string
+  fallbackSrc?: string
 }
 
 export default function ZoomableImage({
@@ -33,6 +34,7 @@ export default function ZoomableImage({
   lockWidthToImage = false,
   revealProgress = 0,
   alt = 'Artwork preview',
+  fallbackSrc,
 }: Props) {
   // Zoom : 0 essais -> zoom max (≈4.6x), maxAttempts -> 1x
   const safeMaxAttempts = Math.max(maxAttempts, 1)
@@ -109,6 +111,16 @@ export default function ZoomableImage({
       setNaturalRatio(result.naturalWidth / result.naturalHeight)
     }
   }
+  const [activeSrc, setActiveSrc] = useState(src)
+  useEffect(() => {
+    setActiveSrc(src)
+  }, [src])
+
+  const handleError = () => {
+    if (fallbackSrc && fallbackSrc !== activeSrc) {
+      setActiveSrc(fallbackSrc)
+    }
+  }
 
   const containerRatio = naturalRatio || baseRatio
 
@@ -162,7 +174,7 @@ export default function ZoomableImage({
       }}
     >
       <MotionImage
-        src={src}
+        src={activeSrc}
         sizes={sizes}
         width={width}
         height={height}
@@ -171,6 +183,7 @@ export default function ZoomableImage({
         quality={85}
         draggable={false}
         onLoadingComplete={handleLoadingComplete}
+        onError={handleError}
         alt={alt}
         style={{
           width: '100%',

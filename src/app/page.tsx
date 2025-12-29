@@ -766,6 +766,7 @@ export default function Home() {
     return 'wide'
   })()
   const mediumCandidate = medium || baseSrc
+  const fallbackRemote = hd || medium || thumb || baseSrc
   const wideCandidate = thumb || mediumCandidate
   const buildCandidates = (...items: Array<string | undefined>) =>
     Array.from(
@@ -1586,6 +1587,7 @@ export default function Home() {
             <ZoomableImage
               key={displaySrc}
               src={displaySrc}
+              fallbackSrc={fallbackRemote}
               width={400}
               height={300}
               attempts={displayAttempts}
