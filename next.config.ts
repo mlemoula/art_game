@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'commons.wikimedia.org',
       },
+      {
+        protocol: 'https',
+        hostname: 'orrbvrpvawnbmirbyaxu.supabase.co',
+      },
     ],
     localPatterns: [
       {

@@ -9,7 +9,6 @@ import {
   type ArtistRecommendation,
 } from '@/utils/getArtistRecommendations'
 import { supabase } from '@/lib/supabaseClient'
-import { getProxiedImageUrl } from '@/utils/getProxiedImageUrl'
 import generatedArtImages from '@/data/generatedArtImages.json'
 
 const normalizeString = (str: string) =>
@@ -773,12 +772,9 @@ export default function Home() {
       new Set(items.filter((value): value is string => Boolean(value)))
     )
 
-  const isGeneratedCache = (value: string | null | undefined) =>
-    typeof value === 'string' && value.startsWith('/generated-artworks/')
-
   const isSrcReady = (candidate: string | null | undefined) => {
     if (!candidate) return false
-    if (candidate === cachedArtSrc || isGeneratedCache(candidate)) return true
+    if (candidate === cachedArtSrc) return true
     if (candidate === hd) return hdLoaded
     if (candidate === medium) return mediumLoaded
     if (candidate === mediumCandidate) return mediumLoaded
@@ -807,13 +803,6 @@ export default function Home() {
     return ''
   }
   const displaySrc = selectSrcForTier(qualityTier)
-  const PROXY_TARGET_WIDTH = 1400
-  const displayNeedsProxy = Boolean(
-    displaySrc && /^https?:\/\//i.test(displaySrc)
-  )
-  const proxiedDisplaySrc = displayNeedsProxy
-    ? getProxiedImageUrl(displaySrc, PROXY_TARGET_WIDTH)
-    : displaySrc
   const displayAttempts = finished ? maxAttempts : attemptsCount
   const srcReady = Boolean(displaySrc && isSrcReady(displaySrc))
   const isDisplayReady = Boolean(displaySrc && srcReady)
@@ -1595,8 +1584,8 @@ export default function Home() {
         <div className={frameInnerClass}>
           {isDisplayReady && displaySrc ? (
             <ZoomableImage
-              key={proxiedDisplaySrc || displaySrc}
-              src={proxiedDisplaySrc || displaySrc}
+              key={displaySrc}
+              src={displaySrc}
               width={400}
               height={300}
               attempts={displayAttempts}

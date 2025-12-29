@@ -18,7 +18,7 @@ Minimalist daily one minute art guessing game powered by Next.js and Supabase.
 
 ## Caching generated artwork images
 
-After you generate a new `artworks_generated.csv` (or whenever Supabase has new rows), run the cache helper so the UI can load a lightweight WebP from your own origin:
+After you generate a new `artworks_generated.csv` (or whenever Supabase has new rows), run the cache helper so the UI can load lightweight WebPs served from Supabase Storage:
 
 1. In Supabase add the cache columns (once):
 
@@ -28,7 +28,7 @@ ALTER TABLE public.daily_art
   ADD COLUMN IF NOT EXISTS cached_image_generated_at TIMESTAMPTZ;
 ```
 
-2. Install the dependencies if you haven’t already and run the generator with your service role key. The script now queries Supabase for any rows where `cached_image_url` is `NULL`, so it only reprocesses the missing artwork entries:
+2. Create a public Supabase Storage bucket (default `generated-artworks`), note the name in `ARTWORK_CACHE_BUCKET` if you rename it, then install dependencies and run the generator with your service role key. The script queries Supabase for rows where `cached_image_url IS NULL`, so it only processes the missing artworks:
 
 ```
 npm install
@@ -37,9 +37,9 @@ SUPABASE_SERVICE_ROLE_KEY=...
 npm run generate:image-cache
 ```
 
-That downloads every `image_url`, converts it to `/public/generated-artworks/<hash>.webp`, updates `daily_art.cached_image_url`, and enriches `src/data/generatedArtImages.json`. The frontend prefers `cached_image_url` and falls back to the JSON map if needed.
+That downloads each `image_url`, converts it to WebP, uploads it into your bucket, updates `daily_art.cached_image_url`, and enriches `src/data/generatedArtImages.json`. The frontend now prefers `cached_image_url`, so once the bucket is populated the app serves those assets directly without hitting Wikimedia.
 
-3. Repeat step 2 whenever you refresh the CSV so the cache (and Supabase column) stays in sync—nothing else is required on the UI side.
+3. Repeat step 2 whenever you refresh the CSV so the cache stays in sync. Because the script filters on `cached_image_url IS NULL`, subsequent runs finish quickly and only pick up work that still needs to be done.
 
 ## Next ideas
 - Add an admin view listing upcoming artworks.
