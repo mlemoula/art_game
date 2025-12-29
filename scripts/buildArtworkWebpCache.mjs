@@ -96,7 +96,23 @@ const build = async () => {
     try {
       console.log(`Converting ${imageUrl}`)
       const sourceBuffer = await safeFetchImage(imageUrl)
-      const converted = await sharp(sourceBuffer).webp({ quality: 85 }).toBuffer()
+      let converted
+      try {
+        converted = await sharp(sourceBuffer).webp({ quality: 85 }).toBuffer()
+      } catch (sharpError) {
+        if (
+          /exceeds pixel limit/i.test(
+            sharpError?.message || ''
+          )
+        ) {
+          converted = await sharp(sourceBuffer)
+            .resize({ width: 4000, height: 4000, fit: 'inside' })
+            .webp({ quality: 85 })
+            .toBuffer()
+        } else {
+          throw sharpError
+        }
+      }
       const publicUrl = await uploadToStorage(hash, converted)
       cache[imageUrl] = publicUrl
 
