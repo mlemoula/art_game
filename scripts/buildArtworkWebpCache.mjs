@@ -100,14 +100,10 @@ const build = async () => {
       try {
         converted = await sharp(sourceBuffer).webp({ quality: 85 }).toBuffer()
       } catch {
-        try {
-          converted = await sharp(sourceBuffer)
-            .resize({ width: 4000, height: 4000, fit: 'inside', withoutEnlargement: true })
-            .webp({ quality: 85 })
-            .toBuffer()
-        } catch (retryError) {
-          throw retryError
-        }
+        converted = await sharp(sourceBuffer)
+          .resize({ width: 2000, height: 2000, fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 80 })
+          .toBuffer()
       }
       const publicUrl = await uploadToStorage(hash, converted)
       cache[imageUrl] = publicUrl
