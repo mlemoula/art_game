@@ -97,13 +97,31 @@ const build = async () => {
       console.log(`Converting ${imageUrl}`)
       const sourceBuffer = await safeFetchImage(imageUrl)
       let converted
-      try {
-        converted = await sharp(sourceBuffer).webp({ quality: 85 }).toBuffer()
-      } catch {
-        converted = await sharp(sourceBuffer)
+      let converted
+      const resizeIfNeeded = async () =>
+        sharp(sourceBuffer)
           .resize({ width: 2000, height: 2000, fit: 'inside', withoutEnlargement: true })
           .webp({ quality: 80 })
           .toBuffer()
+      const convertWithRetry = async () => {
+        try {
+          return await sharp(sourceBuffer).webp({ quality: 85 }).toBuffer()
+        } catch (firstError) {
+          if (/exceeds pixel limit/i.test(firstError?.message || '')) {
+            return resizeIfNeeded()
+          }
+          throw firstError
+        }
+      }
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          converted = await convertWithRetry()
+          break
+        } catch (attemptError) {
+          console.warn(`Attempt ${attempt + 1} failed for ${imageUrl}:`, attemptError.message)
+          if (attempt === 2) throw attemptError
+          await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)))
+        }
       }
       const publicUrl = await uploadToStorage(hash, converted)
       cache[imageUrl] = publicUrl
