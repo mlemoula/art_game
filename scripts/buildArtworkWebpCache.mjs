@@ -98,7 +98,7 @@ const build = async () => {
       const sourceBuffer = await safeFetchImage(imageUrl)
       let converted
       const resizeIfNeeded = async () =>
-        sharp(sourceBuffer)
+        sharp(sourceBuffer, { limitInputPixels: false })
           .resize({ width: 2000, height: 2000, fit: 'inside', withoutEnlargement: true })
           .webp({ quality: 80 })
           .toBuffer()
