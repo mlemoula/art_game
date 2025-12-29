@@ -97,7 +97,6 @@ const build = async () => {
       console.log(`Converting ${imageUrl}`)
       const sourceBuffer = await safeFetchImage(imageUrl)
       let converted
-      let converted
       const resizeIfNeeded = async () =>
         sharp(sourceBuffer)
           .resize({ width: 2000, height: 2000, fit: 'inside', withoutEnlargement: true })
