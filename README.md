@@ -48,6 +48,7 @@ That downloads each `image_url`, converts it to WebP, uploads it into your bucke
 3. Develop sharable streaks/badges and highlight community stats on the homepage to give new players proof that others are playing today.
 4. Offer a reminder channel (email/webhook/Discord) and spotlight a weekly theme or limited-time challenge to keep people coming back.
 5. Reach out to art/gaming newsletters or forums with a short “why we built 4rtW0rk” pitch + a media kit (screenshots + sharing copy).
+6. Track search traffic: use Vercel Analytics or Google Search Console to view which keywords/referrers land on `/archive`, note any queries that deliver new visitors, and update the headline/description on the archive + home page accordingly.
 
 ## Next ideas
 - Add an admin view listing upcoming artworks.

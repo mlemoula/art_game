@@ -1,7 +1,6 @@
 'use client'
 import Link from 'next/link'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import { Analytics } from '@vercel/analytics/next'
 import ZoomableImage from '@/components/ZoomableImage'
 import { getWikimediaUrls } from '@/utils/getWikimediaUrls'
@@ -222,8 +221,6 @@ export default function Home() {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const blurTimeoutRef = useRef<number | null>(null)
   const submitLockRef = useRef(false)
-  const searchParams = useSearchParams()
-  const searchString = searchParams?.toString() ?? ''
   const targetArtist = art?.artist ?? ''
   const artistSuggestions = useMemo(() => {
     const map = new Map<string, string>()
@@ -319,20 +316,26 @@ export default function Home() {
     const loadArt = async () => {
       let dateParam: string | null = null
       try {
-        const params = new URLSearchParams(searchString)
+        const params = new URLSearchParams()
         let offsetValue = 0
         const todayKey = extractDayKey(new Date().toISOString())
-        const offset = params.get('offset')
-        const date = params.get('date')
-        if (offset) {
-          const parsed = Number(offset)
-          if (!Number.isNaN(parsed)) offsetValue = parsed
-        }
-        if (date) {
-          dateParam = date
-          if (!offset) {
-            const dayDiff = diffDays(date, todayKey)
-            if (!Number.isNaN(dayDiff)) offsetValue = dayDiff
+
+        if (typeof window !== 'undefined') {
+          const currentParams = new URLSearchParams(window.location.search)
+          const offset = currentParams.get('offset')
+          const date = currentParams.get('date')
+          if (offset) {
+            params.set('offset', offset)
+            const parsed = Number(offset)
+            if (!Number.isNaN(parsed)) offsetValue = parsed
+          }
+          if (date) {
+            params.set('date', date)
+            dateParam = date
+            if (!offset) {
+              const dayDiff = diffDays(date, todayKey)
+              if (!Number.isNaN(dayDiff)) offsetValue = dayDiff
+            }
           }
         }
         setViewingOffset(offsetValue)
@@ -359,7 +362,7 @@ export default function Home() {
     }
     loadArt()
     return () => controller.abort()
-  }, [requestArtFromApi, searchString])
+  }, [requestArtFromApi])
 
   const generatedArtImageCache = generatedArtImages as Record<string, string>
   const cachedArtSrc =

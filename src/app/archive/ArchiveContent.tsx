@@ -27,11 +27,18 @@ const formatDate = (value?: string | null) => {
 
 type ArchiveContentProps = {
   artworks: ArchiveArtwork[]
+  structuredData?: string
 }
 
-export default function ArchiveContent({ artworks }: ArchiveContentProps) {
+export default function ArchiveContent({ artworks, structuredData }: ArchiveContentProps) {
   return (
     <div className="min-h-screen bg-white px-4 py-12 text-slate-900 dark:bg-slate-950 dark:text-white">
+      {structuredData ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: structuredData }}
+        />
+      ) : null}
       <div className="mx-auto max-w-5xl space-y-6">
         <header className="space-y-2">
           <div className="flex items-center justify-between gap-4">
@@ -50,13 +57,32 @@ export default function ArchiveContent({ artworks }: ArchiveContentProps) {
           {artworks.map((art) => (
             <article
               key={art.id}
+              itemScope
+              itemType="https://schema.org/CreativeWork"
               className="flex h-full flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900"
             >
+              {art.date ? (
+                <meta itemProp="datePublished" content={art.date} />
+              ) : null}
               <div className="text-[11px] uppercase tracking-[0.35em] text-slate-500 dark:text-slate-400">
                 {formatDate(art.date)}
               </div>
-              <p className="text-base font-semibold tracking-tight">{art.title}</p>
-              <p className="text-sm text-slate-600 dark:text-slate-300">{art.artist}</p>
+              <div className="space-y-1">
+                <h2
+                  itemProp="name"
+                  className="text-base font-semibold tracking-tight text-slate-900 dark:text-white"
+                >
+                  {art.title}
+                </h2>
+                <p
+                  itemScope
+                  itemType="https://schema.org/Person"
+                  itemProp="creator"
+                  className="text-sm text-slate-600 dark:text-slate-300"
+                >
+                  <span itemProp="name">{art.artist}</span>
+                </p>
+              </div>
               <div className="relative h-44 overflow-hidden rounded-xl bg-slate-200 dark:bg-slate-800">
                 <Image
                   src={art.cached_image_url || art.image_url}
@@ -66,11 +92,14 @@ export default function ArchiveContent({ artworks }: ArchiveContentProps) {
                   height={267}
                   priority={false}
                   sizes="(max-width: 768px) 100vw, 50vw"
+                  itemProp="image"
                 />
               </div>
               <Link
                 href={`/?date=${art.date ?? ''}`}
                 className="mt-auto inline-flex items-center justify-center rounded-full border border-dashed border-slate-400 px-3 py-1 text-[10px] uppercase tracking-[0.35em] text-slate-700 dark:border-slate-600 dark:text-slate-200"
+                rel="canonical"
+                itemProp="url"
               >
                 Replay this puzzle
               </Link>
