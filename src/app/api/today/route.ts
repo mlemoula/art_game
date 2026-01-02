@@ -28,7 +28,12 @@ export async function GET(request: NextRequest) {
     targetDate = new Date(dateQuery)
   }
 
+  const todayStr = new Date().toISOString().split('T')[0]
   const targetStr = targetDate.toISOString().split('T')[0]
+
+  if (targetStr > todayStr) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   const { data, error } = await supabase
     .from('daily_art')

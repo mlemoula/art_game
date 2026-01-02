@@ -41,6 +41,14 @@ That downloads each `image_url`, converts it to WebP, uploads it into your bucke
 
 3. Repeat step 2 whenever you refresh the CSV so the cache stays in sync. Because the script filters on `cached_image_url IS NULL`, subsequent runs finish quickly and only pick up work that still needs to be done.
 
+## Growth checklist
+
+1. Build content that attracts searches: add a public “Archive” page listing past puzzles + artist blurbs so Google can index “daily art quiz” style queries and link to the home quiz.
+2. Enhance SEO/share metadata (`title`, `description`, `og:image`/`twitter:image`, schema.org markup) so links look polished in social feeds.
+3. Develop sharable streaks/badges and highlight community stats on the homepage to give new players proof that others are playing today.
+4. Offer a reminder channel (email/webhook/Discord) and spotlight a weekly theme or limited-time challenge to keep people coming back.
+5. Reach out to art/gaming newsletters or forums with a short “why we built 4rtW0rk” pitch + a media kit (screenshots + sharing copy).
+
 ## Next ideas
 - Add an admin view listing upcoming artworks.
 - Surface player stats (win rate, streak) in UI.

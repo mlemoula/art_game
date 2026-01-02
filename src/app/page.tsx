@@ -1,5 +1,7 @@
 'use client'
+import Link from 'next/link'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Analytics } from '@vercel/analytics/next'
 import ZoomableImage from '@/components/ZoomableImage'
 import { getWikimediaUrls } from '@/utils/getWikimediaUrls'
@@ -47,6 +49,19 @@ const diffDays = (fromDay: string, toDay: string) => {
   const toTime = Date.parse(`${toDay}T00:00:00Z`)
   if (Number.isNaN(fromTime) || Number.isNaN(toTime)) return Number.NaN
   return Math.round((toTime - fromTime) / DAY_MS)
+}
+
+const formatFriendlyDate = (value?: string | null) => {
+  if (!value) return ''
+  try {
+    return new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(new Date(value))
+  } catch {
+    return value
+  }
 }
 
 interface DailyArt {
@@ -191,6 +206,7 @@ export default function Home() {
   const [playSaved, setPlaySaved] = useState(false)
   const [playStats, setPlayStats] = useState<UserStats | null>(null)
   const [communityStats, setCommunityStats] = useState<CommunityStats | null>(null)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [wikiIntro, setWikiIntro] = useState<string[]>([])
   const [artistWikiIntro, setArtistWikiIntro] = useState<string[]>([])
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
@@ -206,6 +222,8 @@ export default function Home() {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const blurTimeoutRef = useRef<number | null>(null)
   const submitLockRef = useRef(false)
+  const searchParams = useSearchParams()
+  const searchString = searchParams?.toString() ?? ''
   const targetArtist = art?.artist ?? ''
   const artistSuggestions = useMemo(() => {
     const map = new Map<string, string>()
@@ -279,11 +297,18 @@ export default function Home() {
       const response = await fetch(`/api/today${query ? `?${query}` : ''}`, {
         signal,
       })
+      const result = await response.json().catch(() => null)
       if (!response.ok) {
+        const errorMessage =
+          result && typeof result === 'object' && 'error' in result && typeof result.error === 'string'
+            ? result.error
+            : response.statusText || 'Failed to load artwork'
+        throw new Error(errorMessage)
+      }
+      if (!result || typeof result !== 'object') {
         throw new Error('Failed to load artwork')
       }
-      const payload = (await response.json()) as DailyArt
-      setArt(payload)
+      setArt(result as DailyArt)
     },
     []
   )
@@ -292,38 +317,49 @@ export default function Home() {
   useEffect(() => {
     const controller = new AbortController()
     const loadArt = async () => {
+      let dateParam: string | null = null
       try {
-        const params = new URLSearchParams()
+        const params = new URLSearchParams(searchString)
         let offsetValue = 0
-        if (typeof window !== 'undefined') {
-          const currentParams = new URLSearchParams(window.location.search)
-          const offset = currentParams.get('offset')
-          const date = currentParams.get('date')
-          if (offset) {
-            params.set('offset', offset)
-            const parsed = Number(offset)
-            if (!Number.isNaN(parsed)) offsetValue = parsed
-          }
-          if (date) {
-            params.set('date', date)
-            if (!offset) {
-              const todayKey = extractDayKey(new Date().toISOString())
-              const dayDiff = diffDays(date, todayKey)
-              if (!Number.isNaN(dayDiff)) offsetValue = dayDiff
-            }
+        const todayKey = extractDayKey(new Date().toISOString())
+        const offset = params.get('offset')
+        const date = params.get('date')
+        if (offset) {
+          const parsed = Number(offset)
+          if (!Number.isNaN(parsed)) offsetValue = parsed
+        }
+        if (date) {
+          dateParam = date
+          if (!offset) {
+            const dayDiff = diffDays(date, todayKey)
+            if (!Number.isNaN(dayDiff)) offsetValue = dayDiff
           }
         }
         setViewingOffset(offsetValue)
+        if (dateParam && dateParam > todayKey) {
+          setFetchError(
+            `The puzzle for ${formatFriendlyDate(dateParam)} isn’t available yet. Check back when the new entry drops.`
+          )
+          setArt(null)
+          return
+        }
+        setFetchError(null)
         await requestArtFromApi(params, controller.signal)
       } catch (error) {
         if ((error as Error)?.name === 'AbortError') return
+        const message = (error as Error)?.message || 'Unable to load artwork'
         console.error('Unable to load artwork', error)
+        const normalizedMessage =
+          message === 'Not found' && dateParam
+            ? `Puzzle for ${formatFriendlyDate(dateParam)} isn’t available right now.`
+            : message
+        setFetchError(normalizedMessage)
         setArt(null)
       }
     }
     loadArt()
     return () => controller.abort()
-  }, [requestArtFromApi])
+  }, [requestArtFromApi, searchString])
 
   const generatedArtImageCache = generatedArtImages as Record<string, string>
   const cachedArtSrc =
@@ -1028,6 +1064,20 @@ export default function Home() {
     })
     return set
   }, [attemptsHistory, normalize])
+
+  if (!art && fetchError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-white text-gray-600 font-mono dark:bg-slate-950 dark:text-slate-200 px-4">
+        <p className="text-center text-sm max-w-md">{fetchError}</p>
+        <Link
+          href="/"
+          className="mt-3 text-xs uppercase tracking-[0.4em] text-slate-500 dark:text-slate-400 underline decoration-dotted"
+        >
+          Return to today’s puzzle
+        </Link>
+      </div>
+    )
+  }
 
   if (!art) {
     return (
@@ -1958,17 +2008,25 @@ export default function Home() {
           </div>
         </div>
       )}
-      <p className="mt-8 text-[10px] text-gray-400 tracking-wide uppercase text-center">
-        Crafted with care -{' '}
+      <div className="mt-6 flex justify-center gap-3 text-[10px] tracking-[0.35em] uppercase text-center text-gray-400 dark:text-gray-500">
         <a
           href="https://www.linkedin.com/in/martin-lemoulant/"
           target="_blank"
           rel="noreferrer"
-          className="underline decoration-dotted hover:text-gray-600 transition-colors"
+          className="underline decoration-dotted hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
         >
           send feedback
         </a>
-      </p>
+        <span aria-hidden="true" className="text-gray-300 dark:text-gray-600">
+          •
+        </span>
+        <Link
+          href="/archive"
+          className="underline decoration-dotted hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+        >
+          archive
+        </Link>
+      </div>
       <Analytics />
     </div>
   )
