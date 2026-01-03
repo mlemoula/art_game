@@ -124,7 +124,7 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
             : []
           const success = normalizeSuccessFlag(parsed.success)
           const history = attemptsHistory
-            .map((attempt) => {
+            .map((attempt: unknown) => {
               if (!attempt || typeof attempt !== 'object') return null
               const correct = (attempt as { correct?: unknown }).correct
               if (typeof correct !== 'boolean') return null
