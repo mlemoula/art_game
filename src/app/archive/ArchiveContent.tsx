@@ -130,7 +130,7 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
               if (typeof correct !== 'boolean') return null
               return { correct }
             })
-            .filter((entry): entry is AttemptSummary => Boolean(entry))
+            .filter((entry: AttemptSummary | null): entry is AttemptSummary => Boolean(entry))
           const attempts =
             attemptsHistory.length > 0 ? attemptsHistory.length : null
           nextScores[art.id] = { success, attempts, history }
