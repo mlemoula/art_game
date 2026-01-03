@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabaseClient'
+import { fetchWikiDescription } from '@/utils/wikiSummary'
 import ArchiveContent, { type ArchiveArtwork } from './ArchiveContent'
 
 const ARCHIVE_DESCRIPTION =
@@ -32,7 +33,7 @@ const fetchRecentArt = async (): Promise<ArchiveArtwork[]> => {
   const today = new Date().toISOString().split('T')[0]
   const { data, error } = await supabase
     .from('daily_art')
-    .select('id, date, title, artist, cached_image_url, image_url')
+    .select('id, date, title, artist, cached_image_url, image_url, wiki_summary_url')
     .lte('date', today)
     .order('date', { ascending: false })
     .limit(30)
@@ -44,8 +45,24 @@ const fetchRecentArt = async (): Promise<ArchiveArtwork[]> => {
   return data || []
 }
 
+const hydrateArtworkDescriptions = async (artworks: ArchiveArtwork[]) => {
+  if (!artworks.length) return artworks
+  const descriptionEntries = await Promise.all(
+    artworks.map(async (art) => ({
+      id: art.id,
+      description: await fetchWikiDescription(art.wiki_summary_url ?? undefined),
+    }))
+  )
+  const descriptionMap = new Map(descriptionEntries.map((entry) => [entry.id, entry.description]))
+  return artworks.map((art) => ({
+    ...art,
+    description: descriptionMap.get(art.id) ?? art.description ?? null,
+  }))
+}
+
 export default async function ArchivePage() {
-  const artworks = await fetchRecentArt()
+  const recentArtworks = await fetchRecentArt()
+  const artworks = await hydrateArtworkDescriptions(recentArtworks)
   const structuredData = JSON.stringify({
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
@@ -55,19 +72,27 @@ export default async function ArchivePage() {
     hasPart: artworks
       .map((art, index) => {
         if (!art.date) return null
+        const description =
+          art.description ||
+          `${art.title} by ${art.artist} invites you to rediscover a famous canvas.`
+        const item: Record<string, unknown> = {
+          '@type': 'CreativeWork',
+          name: art.title,
+          creator: {
+            '@type': 'Person',
+            name: art.artist,
+          },
+          image: art.cached_image_url || art.image_url,
+          description,
+        }
+        if (art.wiki_summary_url) {
+          item.sameAs = [art.wiki_summary_url]
+        }
         return {
           '@type': 'ListItem',
           position: index + 1,
           url: `${BASE_URL}/?date=${art.date}`,
-          item: {
-            '@type': 'CreativeWork',
-            name: art.title,
-            creator: {
-              '@type': 'Person',
-              name: art.artist,
-            },
-            image: art.cached_image_url || art.image_url,
-          },
+          item,
         }
       })
       .filter(Boolean),

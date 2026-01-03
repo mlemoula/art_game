@@ -3,6 +3,24 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --card-background: #f8fafc;
+  --card-border: #e2e8f0;
+  --card-foreground: #111827;
+  --card-muted: #4b5563;
+  --card-meta: #475569;
+  --card-link: #0f172a;
+}
+
+:root[data-theme='dark'],
+:root.dark {
+  --background: #050505;
+  --foreground: #f8fafc;
+  --card-background: #0f172a;
+  --card-border: #1e293b;
+  --card-foreground: #f8fafc;
+  --card-muted: #94a3b8;
+  --card-meta: #94a3b8;
+  --card-link: #f8fafc;
 }
 
 @theme inline {
@@ -13,7 +31,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --background: #0a0a0a;
     --foreground: #ededed;
   }
@@ -23,4 +41,20 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.card-muted {
+  color: var(--card-muted);
+}
+
+.card-link {
+  color: var(--card-link);
+}
+
+.card-meta {
+  color: var(--card-meta);
+}
+
+.card-foreground {
+  color: var(--card-foreground);
 }

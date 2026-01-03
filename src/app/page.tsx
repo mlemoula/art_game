@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { Analytics } from '@vercel/analytics/next'
 import ZoomableImage from '@/components/ZoomableImage'
+import ThemeToggleButton from '@/components/ThemeToggleButton'
+import { useTheme } from '@/context/theme'
+import { useRouter } from 'next/navigation'
 import { getWikimediaUrls } from '@/utils/getWikimediaUrls'
 import {
   getArtistRecommendations,
@@ -11,6 +14,11 @@ import {
 } from '@/utils/getArtistRecommendations'
 import { supabase } from '@/lib/supabaseClient'
 import generatedArtImages from '@/data/generatedArtImages.json'
+import {
+  buildWikiApiUrl,
+  extractParagraphs,
+  extractTextFromWikiJson,
+} from '@/utils/wikiSummary'
 
 const normalizeString = (str: string) =>
   str
@@ -112,7 +120,6 @@ const FEEDBACK_TONES: Record<FeedbackStatus, string> = {
   missing: 'text-gray-500',
 }
 
-const MAX_WIKI_PARAGRAPHS = 4
 const ASSUMED_MAX_ARTIST_AGE = 85
 const normalizeSuccessFlag = (value: unknown): boolean => {
   if (typeof value === 'boolean') return value
@@ -123,25 +130,6 @@ const normalizeSuccessFlag = (value: unknown): boolean => {
   }
   return false
 }
-
-const stripHtml = (value: string) => {
-  const content = value || ''
-  if (typeof window !== 'undefined' && 'DOMParser' in window) {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(content, 'text/html')
-    return doc.body.textContent || ''
-  }
-  return content.replace(/<[^>]+>/g, ' ')
-}
-
-const extractParagraphs = (raw: string) =>
-  stripHtml(raw || '')
-    .replace(/\r/g, '')
-    .split(/\n{2,}|\n/)
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .slice(0, MAX_WIKI_PARAGRAPHS)
-
 const cleanArtistIntroParagraphs = (paragraphs: string[]) =>
   paragraphs
     .map((p) =>
@@ -152,42 +140,6 @@ const cleanArtistIntroParagraphs = (paragraphs: string[]) =>
         .trim()
     )
     .filter((p) => p.length > 0)
-
-const extractTextFromWikiJson = (payload: unknown): string => {
-  if (!payload || typeof payload !== 'object') return ''
-  const data = payload as Record<string, unknown>
-  if (typeof data.extract === 'string') return data.extract
-  if (typeof data.extract_html === 'string') return data.extract_html
-  if (typeof data.summary === 'string') return data.summary
-  if (typeof data.content === 'string') return data.content
-  const query = data.query
-  if (query && typeof query === 'object') {
-    const pages = (query as { pages?: unknown }).pages
-    if (pages && typeof pages === 'object') {
-      const firstPage = Object.values(pages)[0] as Record<string, unknown>
-      if (firstPage) {
-        if (typeof firstPage.extract === 'string') return firstPage.extract
-        if (typeof firstPage.summary === 'string') return firstPage.summary
-      }
-    }
-  }
-  return ''
-}
-
-const buildWikiApiUrl = (raw: string) => {
-  try {
-    const url = new URL(raw)
-    if (!url.hostname.includes('wikipedia.org')) return raw
-    const lang = url.hostname.split('.')[0]
-    const title = decodeURIComponent(url.pathname.split('/').pop() || '')
-    if (!title) return raw
-    return `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
-      title
-    )}`
-  } catch {
-    return raw
-  }
-}
 
 export default function Home() {
   const [art, setArt] = useState<DailyArt | null>(null)
@@ -212,16 +164,15 @@ export default function Home() {
   const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
   const [guessError, setGuessError] = useState<string | null>(null)
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const { theme, toggleTheme, hydrated } = useTheme()
   const [gaveUp, setGaveUp] = useState(false)
   const [attemptsOpen, setAttemptsOpen] = useState(false)
-  const [loadingPreviousPuzzle, setLoadingPreviousPuzzle] = useState(false)
-  const [viewingOffset, setViewingOffset] = useState(0)
   const maxAttempts = 5
   const inputRef = useRef<HTMLInputElement | null>(null)
   const blurTimeoutRef = useRef<number | null>(null)
   const submitLockRef = useRef(false)
   const targetArtist = art?.artist ?? ''
+  const router = useRouter()
   const artistSuggestions = useMemo(() => {
     const map = new Map<string, string>()
     const addName = (name?: string) => {
@@ -317,7 +268,6 @@ export default function Home() {
       let dateParam: string | null = null
       try {
         const params = new URLSearchParams()
-        let offsetValue = 0
         const todayKey = extractDayKey(new Date().toISOString())
 
         if (typeof window !== 'undefined') {
@@ -326,19 +276,12 @@ export default function Home() {
           const date = currentParams.get('date')
           if (offset) {
             params.set('offset', offset)
-            const parsed = Number(offset)
-            if (!Number.isNaN(parsed)) offsetValue = parsed
           }
           if (date) {
             params.set('date', date)
             dateParam = date
-            if (!offset) {
-              const dayDiff = diffDays(date, todayKey)
-              if (!Number.isNaN(dayDiff)) offsetValue = dayDiff
-            }
           }
         }
-        setViewingOffset(offsetValue)
         if (dateParam && dateParam > todayKey) {
           setFetchError(
             `The puzzle for ${formatFriendlyDate(dateParam)} isn’t available yet. Check back when the new entry drops.`
@@ -868,7 +811,6 @@ export default function Home() {
     persistPlay()
   }, [finished, artId, userToken, playSaved, attemptsHistory, success])
 
-  const isViewingPreviousPuzzle = viewingOffset < 0
   const shareGlyphs = useMemo(() => {
     const tokens = Array.from({ length: maxAttempts }, (_, idx) => {
       const attempt = attemptsHistory[idx]
@@ -923,30 +865,6 @@ export default function Home() {
       }
     } catch {
       setShareMessage('Share canceled or unavailable.')
-    }
-  }
-
-  const handleTryPreviousPuzzle = async () => {
-    if (loadingPreviousPuzzle) return
-    setLoadingPreviousPuzzle(true)
-    try {
-      const params = new URLSearchParams()
-      const targetOffset = viewingOffset < 0 ? 0 : -1
-      params.set('offset', String(targetOffset))
-      await requestArtFromApi(params)
-      setViewingOffset(targetOffset)
-    } catch (error) {
-      console.error('Unable to load previous puzzle', error)
-    } finally {
-      setLoadingPreviousPuzzle(false)
-    }
-  }
-
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark'
-    setTheme(next)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('art_game_theme', next)
     }
   }
 
@@ -1026,38 +944,6 @@ export default function Home() {
   useEffect(() => {
     setGaveUp(false)
   }, [artId])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const stored = window.localStorage.getItem('art_game_theme')
-    if (stored === 'dark' || stored === 'light') {
-      setTheme(stored)
-      return
-    }
-    if (typeof window.matchMedia === 'function') {
-      const media = window.matchMedia('(prefers-color-scheme: dark)')
-      setTheme(media.matches ? 'dark' : 'light')
-      const listener = (event: MediaQueryListEvent) => {
-        if (window.localStorage.getItem('art_game_theme')) return
-        setTheme(event.matches ? 'dark' : 'light')
-      }
-      media.addEventListener('change', listener)
-      return () => {
-        media.removeEventListener('change', listener)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const root = window.document.documentElement
-    root.dataset.theme = theme
-    if (theme === 'dark') {
-      root.classList.add('dark')
-    } else {
-      root.classList.remove('dark')
-    }
-  }, [theme])
 
   const normalize = normalizeString
   const usedGuessSet = useMemo(() => {
@@ -1619,14 +1505,11 @@ export default function Home() {
           >
             ?
           </button>
-          <button
-            type="button"
-            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            onClick={toggleTheme}
-            className="text-xs border border-gray-300 rounded-full px-2 py-1 text-gray-600 button-hover"
-          >
-            {theme === 'dark' ? '🌞' : '🌑'}
-          </button>
+          {hydrated ? (
+            <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} />
+          ) : (
+            <span className="inline-flex h-6 w-12 rounded-full border border-transparent" aria-hidden="true" />
+          )}
         </div>
         <p className="sr-only">
           Guess the painter in up to five attempts. Each wrong guess gracefully zooms out the artwork to reveal more clues.
@@ -1862,17 +1745,10 @@ export default function Home() {
             </button>
             <button
               type="button"
-              onClick={handleTryPreviousPuzzle}
-              disabled={loadingPreviousPuzzle}
-              className="w-full border border-gray-300 text-gray-600 rounded-full px-4 py-2 text-xs tracking-[0.25em] button-hover disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={() => void router.push('/archive')}
+              className="w-full border border-gray-300 text-gray-600 rounded-full px-4 py-2 text-xs tracking-[0.25em] button-hover"
             >
-              {loadingPreviousPuzzle
-                ? isViewingPreviousPuzzle
-                  ? 'Loading today…'
-                  : 'Loading yesterday…'
-                : isViewingPreviousPuzzle
-                ? "Back to today's puzzle"
-                : "Try yesterday's puzzle"}
+              Try past puzzles
             </button>
             {shareMessage && <p className="text-[10px] text-gray-500">{shareMessage}</p>}
             <div className="pt-3 border-t border-gray-100 space-y-3">
