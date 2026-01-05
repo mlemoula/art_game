@@ -436,7 +436,7 @@ export default function Home() {
       try {
         const { data } = await supabase
           .from('plays')
-          .select('success, attempts, created_at')
+          .select('daily_id, success, attempts, created_at')
           .eq('user_token', userToken)
           .order('created_at', { ascending: false })
 
