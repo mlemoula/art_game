@@ -443,16 +443,24 @@ export default function Home() {
         if (!cancelled && data) {
           const total = data.length
           const wins = data.filter((row) => normalizeSuccessFlag(row.success)).length
-          const byDay = new Map<string, { success: boolean; attempts?: number | null }>()
+          type DayRecord = {
+            success: boolean
+            attempts?: number | null
+            dailyId: number
+          }
+          const byDay = new Map<string, DayRecord>()
           data.forEach((row) => {
             const key = extractDayKey(row.created_at)
             if (!key) return
-            if (!byDay.has(key)) {
-              byDay.set(key, {
-                success: normalizeSuccessFlag(row.success),
-                attempts: row.attempts,
-              })
-            }
+            const dailyId = Number(row.daily_id)
+            if (!Number.isFinite(dailyId)) return
+            const existing = byDay.get(key)
+            if (existing && dailyId <= existing.dailyId) return
+            byDay.set(key, {
+              success: normalizeSuccessFlag(row.success),
+              attempts: row.attempts,
+              dailyId,
+            })
           })
           const orderedDays = Array.from(byDay.entries()).sort((a, b) =>
             a[0].localeCompare(b[0])
@@ -929,13 +937,14 @@ export default function Home() {
       success,
       attemptsHistory,
       playSaved,
+      gaveUp,
     }
     try {
       window.localStorage.setItem(key, JSON.stringify(payload))
     } catch {
       // ignore storage failures
     }
-  }, [artId, guess, finished, success, attemptsHistory, playSaved])
+  }, [artId, guess, finished, success, attemptsHistory, playSaved, gaveUp])
 
   useEffect(() => {
     setAttemptsOpen(false)

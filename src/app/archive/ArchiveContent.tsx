@@ -44,6 +44,7 @@ type UserPlaySummary = {
   success: boolean
   attempts: number | null
   history?: AttemptSummary[]
+  finished?: boolean
 }
 
 type UserScoreMap = Record<number, UserPlaySummary>
@@ -90,10 +91,10 @@ const pickPreferredSummary = (
   return local
 }
 
-const buildScoreGlyphs = (history?: AttemptSummary[]) => {
+const buildScoreGlyphs = (history?: AttemptSummary[], fillToken = '.') => {
   const tokens = Array.from({ length: MAX_ARCHIVE_ATTEMPTS }, (_, index) => {
     const attempt = history?.[index]
-    if (!attempt) return '.'
+    if (!attempt) return fillToken
     return attempt.correct ? '✅' : '×'
   })
   return tokens.join(' ')
@@ -133,7 +134,8 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
             .filter((entry: AttemptSummary | null): entry is AttemptSummary => Boolean(entry))
           const attempts =
             attemptsHistory.length > 0 ? attemptsHistory.length : null
-          nextScores[art.id] = { success, attempts, history }
+          const finished = Boolean(parsed.finished)
+          nextScores[art.id] = { success, attempts, history, finished }
         } catch {
           // ignore invalid local entry
         }
@@ -185,10 +187,10 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
               : null
           const existing = summary[dailyId]
           if (!existing) {
-            summary[dailyId] = { success, attempts, history }
+            summary[dailyId] = { success, attempts, history, finished: true }
             continue
           }
-          const candidate: UserPlaySummary = { success, attempts, history }
+          const candidate: UserPlaySummary = { success, attempts, history, finished: true }
           summary[dailyId] =
             pickPreferredSummary(candidate, existing) ?? candidate
         }
@@ -247,12 +249,17 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
             const userSummary = userScores[art.id]
             const localSummary = localScores[art.id]
             const effectiveSummary = pickPreferredSummary(userSummary, localSummary)
-            const hasSolved = Boolean(effectiveSummary?.success)
             const hasAttempts = Boolean(effectiveSummary)
-            const glyphRow = buildScoreGlyphs(effectiveSummary?.history)
-            const titleText = hasAttempts ? art.title : ''
-            const artistText = hasAttempts ? art.artist : ''
-            const imageAlt = hasSolved
+            const isComplete = Boolean(effectiveSummary?.finished)
+            const shouldFillWithCrosses =
+              isComplete && !effectiveSummary?.success
+            const glyphRow = buildScoreGlyphs(
+              effectiveSummary?.history,
+              shouldFillWithCrosses ? '×' : '.'
+            )
+            const titleText = isComplete ? art.title : ''
+            const artistText = isComplete ? art.artist : ''
+            const imageAlt = isComplete
               ? `${art.title} — ${art.artist}`
               : 'Œuvre masquée jusqu’à ce que tu réussisses le puzzle.'
 
@@ -287,7 +294,7 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
                   )}
                 </div>
                 <div className="space-y-2 min-h-[56px]">
-                  {hasAttempts && (
+                  {isComplete && (
                     <div className="space-y-1">
                       <h2
                         itemProp="name"
@@ -316,7 +323,7 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
                     src={art.cached_image_url || art.image_url}
                     alt={imageAlt}
                     className={`h-full w-full object-cover transition duration-500 ${
-                      hasAttempts
+                      isComplete
                         ? 'filter-none'
                         : 'filter blur-sm brightness-90 saturate-0 contrast-75'
                     }`}
@@ -326,7 +333,7 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
                     sizes="(max-width: 768px) 100vw, 50vw"
                     itemProp="image"
                   />
-                  {!hasAttempts && (
+                  {!isComplete && (
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-slate-900/0 to-slate-950/60" />
                   )}
                 </div>
@@ -336,7 +343,7 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
                   rel="canonical"
                   itemProp="url"
                 >
-                  {hasAttempts ? 'Read more' : 'Replay this puzzle'}
+                  {isComplete ? 'Read more' : 'Replay this puzzle'}
                 </Link>
               </article>
             )
