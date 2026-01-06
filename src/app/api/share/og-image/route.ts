@@ -79,6 +79,7 @@ export async function GET(request: NextRequest) {
     const left = Math.max(0, Math.floor((width - cropWidth) / 2))
     const top = Math.max(0, Math.floor((height - cropHeight) / 2))
 
+    const overlayHeight = 70
     const overlayText = `
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -90,21 +91,27 @@ export async function GET(request: NextRequest) {
           <![CDATA[
             .banner {
               font-family: "Geist", "Geist Sans", "Helvetica Neue", "Arial", sans-serif;
-              font-size: 42px;
+              font-size: 38px;
               font-weight: 600;
-              letter-spacing: 0.02em;
+              letter-spacing: 0.04em;
               fill: #ffffff;
             }
           ]]>
         </style>
         <rect
-          x="0"
-          y="${Math.floor(CANVAS_HEIGHT * 0.6)}"
-          width="${CANVAS_WIDTH}"
-          height="${Math.floor(CANVAS_HEIGHT * 0.4)}"
-          fill="rgba(0, 0, 0, 0.65)"
+          x="30"
+          y="${CANVAS_HEIGHT - overlayHeight - 30}"
+          width="${CANVAS_WIDTH - 60}"
+          height="${overlayHeight}"
+          rx="20"
+          ry="20"
+          fill="rgba(0, 0, 0, 0.6)"
         />
-        <text x="40" y="${CANVAS_HEIGHT - 40}" class="banner">
+        <text
+          x="50"
+          y="${CANVAS_HEIGHT - 44}"
+          class="banner"
+        >
           4rtw0rk - Who painted this?
         </text>
       </svg>
