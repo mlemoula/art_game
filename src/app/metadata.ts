@@ -5,13 +5,14 @@ const DEFAULT_TITLE = 'Can you guess today’s painter?'
 const DEFAULT_DESCRIPTION = 'This artwork starts zoomed-in. You have 5 tries to guess the painter. Ready?'
 const DEFAULT_LOGO = `${APP_BASE_URL}/file.svg`
 
-const IMAGE_PLACEHOLDER = { url: DEFAULT_LOGO, width: 1200, height: 630 }
-
 export const normalizeDateParam = (value?: string | string[]) =>
   Array.isArray(value) ? value[0].trim() : (value ?? '').trim()
 
 const buildDateUrl = (date?: string) => date ? `${APP_BASE_URL}/?date=${encodeURIComponent(date)}` : `${APP_BASE_URL}/`
 const buildOgImageUrl = (date?: string) => `${APP_BASE_URL}/api/share/og-image${date ? `?date=${encodeURIComponent(date)}` : ''}`
+
+const DEFAULT_OG_IMAGE = buildOgImageUrl()
+const IMAGE_PLACEHOLDER = { url: DEFAULT_OG_IMAGE, width: 1200, height: 630 }
 
 const BASE_METADATA: Metadata = {
   title: DEFAULT_TITLE,
@@ -30,7 +31,7 @@ const BASE_METADATA: Metadata = {
     card: 'summary_large_image',
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
-    images: IMAGE_PLACEHOLDER.url,
+    images: DEFAULT_OG_IMAGE,
   },
   other: { 'og:logo': DEFAULT_LOGO },
 }
