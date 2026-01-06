@@ -79,48 +79,9 @@ export async function GET(request: NextRequest) {
     const left = Math.max(0, Math.floor((width - cropWidth) / 2))
     const top = Math.max(0, Math.floor((height - cropHeight) / 2))
 
-    const overlayHeight = 70
-    const overlayText = `
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}"
-        width="${CANVAS_WIDTH}"
-        height="${CANVAS_HEIGHT}"
-      >
-        <style>
-        <![CDATA[
-            .banner {
-              font-family: Menlo, "Menlo Regular", "Oxygen Mono", Monaco, "Courier New", monospace;
-              font-size: 34px;
-              font-weight: 600;
-              letter-spacing: 0.08em;
-              fill: #ffffff;
-            }
-          ]]>
-        </style>
-        <rect
-          x="30"
-          y="${CANVAS_HEIGHT - overlayHeight - 30}"
-          width="${CANVAS_WIDTH - 60}"
-          height="${overlayHeight}"
-          rx="20"
-          ry="20"
-          fill="rgba(0, 0, 0, 0.6)"
-        />
-        <text
-          x="50"
-          y="${CANVAS_HEIGHT - 44}"
-          class="banner"
-        >
-          4rtw0rk - Who painted this?
-        </text>
-      </svg>
-    `
-
     const finalImage = await sharp(imageBuffer)
       .extract({ left, top, width: cropWidth, height: cropHeight })
       .resize(CANVAS_WIDTH, CANVAS_HEIGHT, { fit: 'cover' })
-      .composite([{ input: Buffer.from(overlayText), blend: 'over' }])
       .jpeg({ quality: 78 })
       .toBuffer()
 
