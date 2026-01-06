@@ -4,9 +4,12 @@ import { buildMetadataForDate, normalizeDateParam } from "./metadata";
 export async function generateMetadata({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?:
+    | Record<string, string | string[] | undefined>
+    | Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const date = normalizeDateParam(searchParams?.date);
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const date = normalizeDateParam(resolvedSearchParams?.date);
   return buildMetadataForDate(date);
 }
 
