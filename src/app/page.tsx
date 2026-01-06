@@ -839,19 +839,15 @@ export default function Home() {
         (typeof window !== 'undefined' ? window.location.origin : 'https://4rtw0rk.com'))
     const path = art.date ? `/?date=${encodeURIComponent(art.date)}` : '/'
     const shareUrl = `${appUrl}${path}`
-    const baseScore = Math.max(0, maxAttempts - attemptsCount)
-    const scoreValue = success ? Math.max(1, baseScore + 1) : 0
-    const scoreLine = `Score: ${scoreValue} (${attemptsCount}/${maxAttempts} tries)`
     const attemptLine = success
       ? 'Puzzle solved, but the painter stays secret.'
-      : `Tried ${attemptsCount}/${maxAttempts} guesses.`
+      : 'Still unsolved, care to take it on?'
     const inviteLine = success
       ? 'Can you beat my glyph grid?'
-      : 'Care to finish it faster than me?'
+      : 'Show me how you’d finish it.'
     const pitchLines = [
       '4rtw0rk · One-minute art puzzle',
       attemptLine,
-      scoreLine,
       shareGlyphs,
       inviteLine,
       shareUrl,

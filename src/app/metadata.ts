@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 const DEFAULT_META_DESCRIPTION =
   'Guess the painter in five attempts while the artwork gracefully zooms out. No ads, just culture.'
 const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://4rtw0rk.com').replace(/\/+$/, '')
+const DEFAULT_LOGO = `${APP_BASE_URL}/file.svg`
 
 const DEFAULT_METADATA: Metadata = {
   title: '4rtW0rk - One minute art puzzle',
@@ -14,9 +15,10 @@ const DEFAULT_METADATA: Metadata = {
     url: `${APP_BASE_URL}/`,
     siteName: '4rtW0rk',
     type: 'website',
+    locale: 'en_US',
     images: [
       {
-        url: '/meta/og-default.png',
+        url: DEFAULT_LOGO,
         width: 1200,
         height: 630,
       },
@@ -26,6 +28,10 @@ const DEFAULT_METADATA: Metadata = {
     card: 'summary_large_image',
     title: '4rtW0rk - One minute art puzzle',
     description: DEFAULT_META_DESCRIPTION,
+    images: DEFAULT_LOGO,
+  },
+  other: {
+    'og:logo': DEFAULT_LOGO,
   },
 }
 
@@ -60,13 +66,8 @@ export async function generateMetadata({
     },
     twitter: {
       ...DEFAULT_METADATA.twitter,
-      images: [
-        {
-          url: ogImageUrl,
-          width: 1200,
-          height: 630,
-        },
-      ],
+      images: ogImageUrl,
     },
+    other: DEFAULT_METADATA.other,
   }
 }
