@@ -1812,7 +1812,7 @@ export default function Home() {
                   <p className="mt-2 text-[11px] text-gray-600">
                     {communityStats.total === 1
                       ? '1 person has played today'
-                      : `${communityStats.total} have played today`}
+                      : `${communityStats.total} have played this puzzle`}
                   </p>
                   <p className="text-[11px] text-gray-600">
                     {communityStats.successRate}% solved • {communityStats.fastRate}% in 3 tries or fewer
