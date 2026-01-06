@@ -22,7 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <Head searchParams={searchParams || {}} />
+      <Head searchParams={searchParams ?? {}} />
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
