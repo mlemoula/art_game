@@ -31,6 +31,8 @@ export default function Head({
   const ogImage = buildOgImageUrl(dateParam)
   return (
     <>
+      <link rel="preconnect" href="https://upload.wikimedia.org" />
+      <link rel="preconnect" href="https://commons.wikimedia.org" />
       <title>{DEFAULT_TITLE}</title>
       <meta name="description" content={DEFAULT_DESCRIPTION} />
       <meta property="og:locale" content="en_US" />
