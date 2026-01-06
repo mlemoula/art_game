@@ -88,12 +88,12 @@ export async function GET(request: NextRequest) {
         height="${CANVAS_HEIGHT}"
       >
         <style>
-          <![CDATA[
+        <![CDATA[
             .banner {
-              font-family: "Geist", "Geist Sans", "Helvetica Neue", "Arial", sans-serif;
-              font-size: 38px;
+              font-family: Menlo, "Menlo Regular", "Oxygen Mono", Monaco, "Courier New", monospace;
+              font-size: 34px;
               font-weight: 600;
-              letter-spacing: 0.04em;
+              letter-spacing: 0.08em;
               fill: #ffffff;
             }
           ]]>
