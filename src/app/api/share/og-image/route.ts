@@ -19,6 +19,7 @@ const fetchArtwork = async (date?: string | null) => {
     .from('daily_art')
     .select('id, date, image_url, cached_image_url')
     .order('date', { ascending: false })
+    .limit(1)
 
   if (date) {
     builder.eq('date', date)
