@@ -7,12 +7,13 @@ const DEFAULT_LOGO = `${APP_BASE_URL}/file.svg`
 
 const IMAGE_PLACEHOLDER = { url: DEFAULT_LOGO, width: 1200, height: 630 }
 
-const normalizeDate = (value?: string | string[]) => Array.isArray(value) ? value[0].trim() : (value ?? '').trim()
+export const normalizeDateParam = (value?: string | string[]) =>
+  Array.isArray(value) ? value[0].trim() : (value ?? '').trim()
 
 const buildDateUrl = (date?: string) => date ? `${APP_BASE_URL}/?date=${encodeURIComponent(date)}` : `${APP_BASE_URL}/`
 const buildOgImageUrl = (date?: string) => `${APP_BASE_URL}/api/share/og-image${date ? `?date=${encodeURIComponent(date)}` : ''}`
 
-export const metadata: Metadata = {
+const BASE_METADATA: Metadata = {
   title: DEFAULT_TITLE,
   description: DEFAULT_DESCRIPTION,
   metadataBase: new URL(APP_BASE_URL),
@@ -34,22 +35,19 @@ export const metadata: Metadata = {
   other: { 'og:logo': DEFAULT_LOGO },
 }
 
-export async function generateMetadata({
-  searchParams,
-}: { searchParams: Record<string, string | string[] | undefined> }): Promise<Metadata> {
-  const date = normalizeDate(searchParams.date)
+export function buildMetadataForDate(date?: string): Metadata {
   const url = buildDateUrl(date)
   const image = buildOgImageUrl(date)
 
   return {
-    ...metadata,
+    ...BASE_METADATA,
     openGraph: {
-      ...metadata.openGraph,
+      ...BASE_METADATA.openGraph,
       url,
       images: [{ url: image, width: 1200, height: 630 }],
     },
     twitter: {
-      ...metadata.twitter,
+      ...BASE_METADATA.twitter,
       images: image,
     },
   }
