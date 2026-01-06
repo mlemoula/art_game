@@ -1,7 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/context/theme";
-import { buildMetadataForDate, normalizeDateParam } from "./metadata";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,13 +24,4 @@ export default function RootLayout({
       </body>
     </html>
   );
-}
-
-export async function generateMetadata({
-  searchParams,
-}: {
-  searchParams?: Record<string, string | string[] | undefined>;
-}) {
-  const date = normalizeDateParam(searchParams?.date);
-  return buildMetadataForDate(date);
 }
