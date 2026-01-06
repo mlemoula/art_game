@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 const CANVAS_WIDTH = 1200
 const CANVAS_HEIGHT = 630
 const DETAIL_RATIO = 0.65
-const CACHE_CONTROL = 'public, max-age=0, s-maxage=86400, stale-while-revalidate=86400'
+const CACHE_CONTROL = 'public, max-age=0, s-maxage=31536000, immutable'
 
 const normalizeDateValue = (value?: string) => {
   if (!value) return ''
