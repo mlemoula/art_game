@@ -13,20 +13,6 @@ const normalizeDateValue = (value?: string) => {
   return value.trim().split('T')[0]
 }
 
-const buildSeed = (artId?: number, date?: string) => {
-  if (typeof artId === 'number' && !Number.isNaN(artId)) return artId
-  const numericDate = Number(date?.replace(/-/g, ''))
-  return Number.isFinite(numericDate) ? numericDate : 0
-}
-
-const pseudoFraction = (seed: number, modifier: number) =>
-  ((seed * modifier + 12345) % 233280) / 233280
-
-const getOffset = (seed: number, modifier: number, max: number) => {
-  if (max <= 0) return 0
-  return Math.floor(pseudoFraction(seed, modifier) * (max + 1))
-}
-
 const fetchArtwork = async (date?: string | null) => {
   const today = new Date().toISOString().split('T')[0]
   const builder = supabase
@@ -90,13 +76,9 @@ export async function GET(request: NextRequest) {
 
     const cropWidth = Math.max(1, Math.min(width - 1, Math.floor(width * DETAIL_RATIO)))
     const cropHeight = Math.max(1, Math.min(height - 1, Math.floor(height * DETAIL_RATIO)))
-    const maxLeft = Math.max(0, width - cropWidth)
-    const maxTop = Math.max(0, height - cropHeight)
-    const seed = buildSeed(data.id, data.date)
-    const left = getOffset(seed, 7901, maxLeft)
-    const top = getOffset(seed, 1213, maxTop)
+    const left = Math.max(0, Math.floor((width - cropWidth) / 2))
+    const top = Math.max(0, Math.floor((height - cropHeight) / 2))
 
-    const bandHeight = 120
     const overlayText = `
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -104,21 +86,25 @@ export async function GET(request: NextRequest) {
         width="${CANVAS_WIDTH}"
         height="${CANVAS_HEIGHT}"
       >
+        <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="rgba(0,0,0,0)" />
+          <stop offset="80%" stop-color="rgba(0,0,0,0.7)" />
+        </linearGradient>
         <rect
           x="0"
-          y="${CANVAS_HEIGHT - bandHeight}"
+          y="${Math.floor(CANVAS_HEIGHT * 0.65)}"
           width="${CANVAS_WIDTH}"
-          height="${bandHeight}"
-          fill="rgba(0, 0, 0, 0.65)"
+          height="${Math.floor(CANVAS_HEIGHT * 0.35)}"
+          fill="url(#fade)"
         />
         <text
           x="40"
           y="${CANVAS_HEIGHT - 40}"
-          font-size="42"
+          font-size="38"
           font-family="Inter, Helvetica, Arial, sans-serif"
           fill="#fdfdfd"
           font-weight="600"
-          letter-spacing="2"
+          letter-spacing="1.5"
         >
           4rtw0rk · One-minute art puzzle
         </text>
