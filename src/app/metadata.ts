@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 
 const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://4rtw0rk.vercel.app').replace(/\/+$/, '')
-const DEFAULT_TITLE = '4rtW0rk - One minute art puzzle'
-const DEFAULT_DESCRIPTION = 'Guess the painter in five attempts while the artwork gracefully zooms out. No ads, just culture.'
+const DEFAULT_TITLE = 'Can you guess today’s painter?'
+const DEFAULT_DESCRIPTION = 'This artwork starts zoomed-in. You have 5 tries to guess the painter. Ready?'
 const DEFAULT_LOGO = `${APP_BASE_URL}/file.svg`
 
 const IMAGE_PLACEHOLDER = { url: DEFAULT_LOGO, width: 1200, height: 630 }
