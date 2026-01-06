@@ -10,6 +10,8 @@ export async function generateMetadata({
   return buildMetadataForDate(date);
 }
 
+export const dynamic = "force-dynamic";
+
 export default function Page() {
   return <Home />;
 }
