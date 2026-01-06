@@ -96,6 +96,7 @@ export async function GET(request: NextRequest) {
     const left = getOffset(seed, 7901, maxLeft)
     const top = getOffset(seed, 1213, maxTop)
 
+    const bandHeight = 120
     const overlayText = `
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -103,13 +104,13 @@ export async function GET(request: NextRequest) {
         width="${CANVAS_WIDTH}"
         height="${CANVAS_HEIGHT}"
       >
-        <defs>
-          <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="35%" stop-color="#000000" stop-opacity="0" />
-            <stop offset="100%" stop-color="#000000" stop-opacity="0.68" />
-          </linearGradient>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#fade)" />
+        <rect
+          x="0"
+          y="${CANVAS_HEIGHT - bandHeight}"
+          width="${CANVAS_WIDTH}"
+          height="${bandHeight}"
+          fill="rgba(0, 0, 0, 0.65)"
+        />
         <text
           x="40"
           y="${CANVAS_HEIGHT - 40}"
