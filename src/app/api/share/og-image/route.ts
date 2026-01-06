@@ -124,7 +124,9 @@ export async function GET(request: NextRequest) {
       .jpeg({ quality: 78 })
       .toBuffer()
 
-    return new NextResponse(finalImage, {
+    const responseBody = new Uint8Array(finalImage)
+
+    return new NextResponse(responseBody, {
       headers: {
         'Content-Type': 'image/jpeg',
         'Cache-Control': CACHE_CONTROL,
