@@ -83,7 +83,6 @@ export async function generateMetadata({
     twitter: {
       ...baseTwitter,
       images: imageUrl,
-      url: shareUrl,
     },
   }
 }
