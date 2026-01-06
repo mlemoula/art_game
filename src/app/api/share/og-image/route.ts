@@ -97,11 +97,16 @@ export async function GET(request: NextRequest) {
     const top = getOffset(seed, 1213, maxTop)
 
     const overlayText = `
-      <svg width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}"
+        width="${CANVAS_WIDTH}"
+        height="${CANVAS_HEIGHT}"
+      >
         <defs>
           <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="30%" stop-color="rgba(0,0,0,0)" />
-            <stop offset="100%" stop-color="rgba(0,0,0,0.65)" />
+            <stop offset="35%" stop-color="#000000" stop-opacity="0" />
+            <stop offset="100%" stop-color="#000000" stop-opacity="0.68" />
           </linearGradient>
         </defs>
         <rect width="100%" height="100%" fill="url(#fade)" />
@@ -111,6 +116,8 @@ export async function GET(request: NextRequest) {
           font-size="42"
           font-family="Inter, Helvetica, Arial, sans-serif"
           fill="#fdfdfd"
+          font-weight="600"
+          letter-spacing="2"
         >
           4rtw0rk · One-minute art puzzle
         </text>

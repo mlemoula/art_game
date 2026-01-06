@@ -165,7 +165,6 @@ export default function Home() {
   const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
   const [guessError, setGuessError] = useState<string | null>(null)
-  const [elapsedSeconds, setElapsedSeconds] = useState<number | null>(null)
   const { theme, toggleTheme, hydrated } = useTheme()
   const [gaveUp, setGaveUp] = useState(false)
   const [attemptsOpen, setAttemptsOpen] = useState(false)
@@ -173,7 +172,6 @@ export default function Home() {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const blurTimeoutRef = useRef<number | null>(null)
   const submitLockRef = useRef(false)
-  const startTimeRef = useRef<number>(Date.now())
   const targetArtist = art?.artist ?? ''
   const router = useRouter()
   const artistSuggestions = useMemo(() => {
@@ -330,8 +328,6 @@ export default function Home() {
   // Reset gameplay quand nouvelle oeuvre arrive et restaurer progression locale
   useEffect(() => {
     if (!artId) return
-    startTimeRef.current = Date.now()
-    setElapsedSeconds(null)
     setArtistHints(FALLBACK_ARTISTS)
     setMediumLoaded(false)
     setShareMessage('')
@@ -843,19 +839,19 @@ export default function Home() {
         (typeof window !== 'undefined' ? window.location.origin : 'https://4rtw0rk.com'))
     const path = art.date ? `/?date=${encodeURIComponent(art.date)}` : '/'
     const shareUrl = `${appUrl}${path}`
-    const fallbackTime = Math.max(0, Math.round((Date.now() - startTimeRef.current) / 1000))
-    const timeSeconds = elapsedSeconds ?? fallbackTime
     const baseScore = Math.max(0, maxAttempts - attemptsCount)
     const scoreValue = success ? Math.max(1, baseScore + 1) : 0
-    const timeLabel = success ? `Solved in ${timeSeconds}s` : `Played for ${timeSeconds}s`
-    const scoreLabel = `Score: ${scoreValue} (${attemptsCount}/${maxAttempts} tries)`
+    const scoreLine = `Score: ${scoreValue} (${attemptsCount}/${maxAttempts} tries)`
+    const attemptLine = success
+      ? 'Puzzle solved, but the painter stays secret.'
+      : `Tried ${attemptsCount}/${maxAttempts} guesses.`
     const inviteLine = success
-      ? `Can you beat my ${timeSeconds}s run?`
-      : `Think you can crack it faster than ${timeSeconds}s?`
+      ? 'Can you beat my glyph grid?'
+      : 'Care to finish it faster than me?'
     const pitchLines = [
       '4rtw0rk · One-minute art puzzle',
-      timeLabel,
-      scoreLabel,
+      attemptLine,
+      scoreLine,
       shareGlyphs,
       inviteLine,
       shareUrl,
@@ -974,13 +970,6 @@ export default function Home() {
   useEffect(() => {
     setGaveUp(false)
   }, [artId])
-
-  useEffect(() => {
-    if (!finished) return
-    const startTime = startTimeRef.current || Date.now()
-    const elapsed = Math.max(0, Math.round((Date.now() - startTime) / 1000))
-    setElapsedSeconds(elapsed)
-  }, [finished])
 
   const normalize = normalizeString
   const usedGuessSet = useMemo(() => {

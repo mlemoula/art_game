@@ -60,7 +60,13 @@ export async function generateMetadata({
     },
     twitter: {
       ...DEFAULT_METADATA.twitter,
-      images: ogImageUrl,
+      images: [
+        {
+          url: ogImageUrl,
+          width: 1200,
+          height: 630,
+        },
+      ],
     },
   }
 }
