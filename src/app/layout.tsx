@@ -20,9 +20,10 @@ const resolveString = (value?: string | URL | { toString: () => string }) => {
   return value.toString();
 };
 
-const pickImageUrl = (
-  input?: Metadata["openGraph"]["images"]
-): string | undefined => {
+type MetadataOpenGraph = NonNullable<Metadata["openGraph"]>
+type MetadataImages = MetadataOpenGraph["images"]
+
+const pickImageUrl = (input?: MetadataImages | Metadata["twitter"]["images"]): string | undefined => {
   if (!input) return undefined;
   if (typeof input === "string") return resolveString(input);
   if (Array.isArray(input) && input.length) {
