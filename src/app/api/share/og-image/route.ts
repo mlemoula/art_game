@@ -1,0 +1,140 @@
+import sharp from 'sharp'
+import { NextRequest, NextResponse } from 'next/server'
+
+import { supabase } from '@/lib/supabaseClient'
+
+const CANVAS_WIDTH = 1200
+const CANVAS_HEIGHT = 630
+const DETAIL_RATIO = 0.65
+const CACHE_CONTROL = 'public, max-age=0, s-maxage=86400, stale-while-revalidate=86400'
+
+const normalizeDateValue = (value?: string) => {
+  if (!value) return ''
+  return value.trim().split('T')[0]
+}
+
+const buildSeed = (artId?: number, date?: string) => {
+  if (typeof artId === 'number' && !Number.isNaN(artId)) return artId
+  const numericDate = Number(date?.replace(/-/g, ''))
+  return Number.isFinite(numericDate) ? numericDate : 0
+}
+
+const pseudoFraction = (seed: number, modifier: number) =>
+  ((seed * modifier + 12345) % 233280) / 233280
+
+const getOffset = (seed: number, modifier: number, max: number) => {
+  if (max <= 0) return 0
+  return Math.floor(pseudoFraction(seed, modifier) * (max + 1))
+}
+
+const fetchArtwork = async (date?: string | null) => {
+  const today = new Date().toISOString().split('T')[0]
+  const builder = supabase
+    .from('daily_art')
+    .select('id, date, image_url, cached_image_url')
+    .order('date', { ascending: false })
+
+  if (date) {
+    builder.eq('date', date)
+  } else {
+    builder.lte('date', today)
+  }
+
+  const { data, error } = await builder.maybeSingle()
+  if (error) {
+    return { error }
+  }
+  return { data }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const url = new URL(request.url)
+    const dateParam = normalizeDateValue(url.searchParams.get('date') ?? undefined)
+    const { data, error } = await fetchArtwork(dateParam || undefined)
+    if (error) {
+      console.error('OG image: unable to fetch artwork', error)
+      return NextResponse.json(
+        { error: 'Unable to fetch artwork for OG image' },
+        { status: 500 }
+      )
+    }
+    if (!data) {
+      return NextResponse.json({ error: 'Artwork not found' }, { status: 404 })
+    }
+
+    const imageUrl = data.cached_image_url || data.image_url
+    if (!imageUrl) {
+      return NextResponse.json({ error: 'No artwork image available' }, { status: 404 })
+    }
+
+    const imageResponse = await fetch(imageUrl)
+    if (!imageResponse.ok) {
+      console.error('OG image: failed to download source image', imageUrl)
+      return NextResponse.json(
+        { error: 'Unable to download artwork image' },
+        { status: 502 }
+      )
+    }
+
+    const imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
+    const metadata = await sharp(imageBuffer).metadata()
+    if (!metadata.width || !metadata.height) {
+      return NextResponse.json(
+        { error: 'Unable to determine artwork dimensions' },
+        { status: 422 }
+      )
+    }
+    const width = metadata.width
+    const height = metadata.height
+
+    const cropWidth = Math.max(1, Math.min(width - 1, Math.floor(width * DETAIL_RATIO)))
+    const cropHeight = Math.max(1, Math.min(height - 1, Math.floor(height * DETAIL_RATIO)))
+    const maxLeft = Math.max(0, width - cropWidth)
+    const maxTop = Math.max(0, height - cropHeight)
+    const seed = buildSeed(data.id, data.date)
+    const left = getOffset(seed, 7901, maxLeft)
+    const top = getOffset(seed, 1213, maxTop)
+
+    const overlayText = `
+      <svg width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="30%" stop-color="rgba(0,0,0,0)" />
+            <stop offset="100%" stop-color="rgba(0,0,0,0.65)" />
+          </linearGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#fade)" />
+        <text
+          x="40"
+          y="${CANVAS_HEIGHT - 40}"
+          font-size="42"
+          font-family="Inter, Helvetica, Arial, sans-serif"
+          fill="#fdfdfd"
+        >
+          4rtw0rk · One-minute art puzzle
+        </text>
+      </svg>
+    `
+
+    const finalImage = await sharp(imageBuffer)
+      .extract({ left, top, width: cropWidth, height: cropHeight })
+      .resize(CANVAS_WIDTH, CANVAS_HEIGHT, { fit: 'cover' })
+      .composite([{ input: Buffer.from(overlayText), blend: 'over' }])
+      .jpeg({ quality: 78 })
+      .toBuffer()
+
+    return new NextResponse(finalImage, {
+      headers: {
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': CACHE_CONTROL,
+      },
+    })
+  } catch (error) {
+    console.error('OG image: unexpected error', error)
+    return NextResponse.json(
+      { error: 'Failed to generate OG image' },
+      { status: 500 }
+    )
+  }
+}
