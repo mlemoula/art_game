@@ -841,11 +841,11 @@ export default function Home() {
     const path = art.date ? `/?date=${encodeURIComponent(art.date)}` : '/'
     const shareUrl = `${appUrl}${path}`
     const attemptLine = success
-      ? 'Puzzle solved, but the painter stays secret.'
-      : 'Still unsolved, care to take it on?'
+      ? 'Puzzle solved.'
+      : 'I didn’t get it…'
     const inviteLine = success
-      ? 'Can you beat my glyph grid?'
-      : 'Show me how you’d finish it.'
+      ? 'Can you beat me?'
+      : 'Think you can?'
     const pitchLines = [
       '4rtw0rk · One-minute art puzzle',
       attemptLine,
