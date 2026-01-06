@@ -86,27 +86,26 @@ export async function GET(request: NextRequest) {
         width="${CANVAS_WIDTH}"
         height="${CANVAS_HEIGHT}"
       >
-        <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="rgba(0,0,0,0)" />
-          <stop offset="80%" stop-color="rgba(0,0,0,0.7)" />
-        </linearGradient>
+        <style>
+          <![CDATA[
+            .banner {
+              font-family: "Geist", "Geist Sans", "Helvetica Neue", "Arial", sans-serif;
+              font-size: 42px;
+              font-weight: 600;
+              letter-spacing: 0.02em;
+              fill: #ffffff;
+            }
+          ]]>
+        </style>
         <rect
           x="0"
-          y="${Math.floor(CANVAS_HEIGHT * 0.65)}"
+          y="${Math.floor(CANVAS_HEIGHT * 0.6)}"
           width="${CANVAS_WIDTH}"
-          height="${Math.floor(CANVAS_HEIGHT * 0.35)}"
-          fill="url(#fade)"
+          height="${Math.floor(CANVAS_HEIGHT * 0.4)}"
+          fill="rgba(0, 0, 0, 0.65)"
         />
-        <text
-          x="40"
-          y="${CANVAS_HEIGHT - 40}"
-          font-size="38"
-          font-family="Inter, Helvetica, Arial, sans-serif"
-          fill="#fdfdfd"
-          font-weight="600"
-          letter-spacing="1.5"
-        >
-          4rtw0rk · One-minute art puzzle
+        <text x="40" y="${CANVAS_HEIGHT - 40}" class="banner">
+          4rtw0rk - Who painted this?
         </text>
       </svg>
     `
