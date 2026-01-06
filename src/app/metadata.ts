@@ -20,8 +20,8 @@ export const metadata: Metadata = {
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
     url: `${APP_BASE_URL}/`,
-    type: 'website',
     siteName: '4rtW0rk',
+    type: 'website',
     locale: 'en_US',
     images: [IMAGE_PLACEHOLDER],
   },
@@ -59,14 +59,14 @@ export async function generateMetadata({
   searchParams: Record<string, string | string[] | undefined>
 }): Promise<Metadata> {
   const dateParam = normalizeDateParam(searchParams.date)
-  const shareUrl = buildDateUrl(dateParam)
+  const pageUrl = buildDateUrl(dateParam)
   const imageUrl = buildOgImageUrl(dateParam)
 
   return {
     ...metadata,
     openGraph: {
       ...metadata.openGraph,
-      url: shareUrl,
+      url: pageUrl,
       images: [
         {
           url: imageUrl,
