@@ -1,7 +1,7 @@
-# Art Game - 4rtW0rk
+# Who painted this?
 
 Minimalist daily one minute art guessing game powered by Next.js and Supabase.
-👉 https://4rtw0rk.vercel.app/
+👉 https://whopaintedthis.vercel.app/
 
 ## Deploy
 1. Install deps: `npm install`.
@@ -47,7 +47,7 @@ That downloads each `image_url`, converts it to WebP, uploads it into your bucke
 2. Enhance SEO/share metadata (`title`, `description`, `og:image`/`twitter:image`, schema.org markup) so links look polished in social feeds.
 3. Develop sharable streaks/badges and highlight community stats on the homepage to give new players proof that others are playing today.
 4. Offer a reminder channel (email/webhook/Discord) and spotlight a weekly theme or limited-time challenge to keep people coming back.
-5. Reach out to art/gaming newsletters or forums with a short “why we built 4rtW0rk” pitch + a media kit (screenshots + sharing copy).
+5. Reach out to art/gaming newsletters or forums with a short “why we built Who painted this?” pitch + a media kit (screenshots + sharing copy).
 6. Track search traffic: use Vercel Analytics or Google Search Console to view which keywords/referrers land on `/archive`, note any queries that deliver new visitors, and update the headline/description on the archive + home page accordingly.
 
 ## Next ideas

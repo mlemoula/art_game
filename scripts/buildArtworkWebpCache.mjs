@@ -36,7 +36,7 @@ const safeFetchImage = async (url) => {
   const response = await fetch(url, {
     headers: {
       accept: 'image/*',
-      'user-agent': '4rtW0rk Image Converter (https://github.com/4rtw0rk)',
+      'user-agent': 'Who Painted This? Image Converter (https://github.com/4rtw0rk)',
     },
   })
   if (!response.ok) {

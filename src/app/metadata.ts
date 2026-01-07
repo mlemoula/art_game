@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
-const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://4rtw0rk.vercel.app').replace(/\/+$/, '')
-const DEFAULT_TITLE = 'Can you guess today’s painter?'
+const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://whopaintedthis.vercel.app').replace(/\/+$/, '')
+const DEFAULT_TITLE = 'Who painted this?'
 const DEFAULT_DESCRIPTION = 'This artwork starts zoomed-in. You have 5 tries to guess the painter. Ready?'
 const DEFAULT_LOGO = `${APP_BASE_URL}/file.svg`
 
@@ -22,7 +22,7 @@ const BASE_METADATA: Metadata = {
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
     url: APP_BASE_URL,
-    siteName: '4rtW0rk',
+    siteName: 'Who painted this?',
     type: 'website',
     locale: 'en_US',
     images: [IMAGE_PLACEHOLDER],

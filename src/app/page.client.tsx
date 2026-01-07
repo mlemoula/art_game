@@ -837,7 +837,9 @@ export default function Home() {
     if (!art || !finished) return null
     const appUrl =
       (process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, '') ||
-        (typeof window !== 'undefined' ? window.location.origin : 'https://4rtw0rk.com'))
+        (typeof window !== 'undefined'
+          ? window.location.origin
+          : 'https://whopaintedthis.vercel.app'))
     const path = art.date ? `/?date=${encodeURIComponent(art.date)}` : '/'
     const shareUrl = `${appUrl}${path}`
     const attemptLine = success
@@ -847,15 +849,17 @@ export default function Home() {
       ? 'Can you beat me?'
       : 'Think you can?'
     const pitchLines = [
-      '4rtw0rk · One-minute art puzzle',
+      'Who painted this? · One-minute art puzzle',
       attemptLine,
       shareGlyphs,
       inviteLine,
-      shareUrl,
     ].filter(Boolean)
+    const text = pitchLines.join('\n')
+    const textWithUrl = [text, shareUrl].filter(Boolean).join('\n')
     return {
-      text: pitchLines.join('\n'),
+      text,
       url: shareUrl,
+      textWithUrl,
     }
   }
 
@@ -874,16 +878,16 @@ export default function Home() {
     try {
       if (nav?.share) {
         await nav.share({
-          title: '4rtW0rk',
+          title: 'Who painted this?',
           text: payload.text,
           url: payload.url,
         })
         setShareMessage('Shared with your device dialog.')
       } else if (nav?.clipboard?.writeText) {
-        await nav.clipboard.writeText(payload.text)
+        await nav.clipboard.writeText(payload.textWithUrl ?? payload.text)
         setShareMessage('Result copied to clipboard.')
       } else {
-        setShareMessage(payload.text)
+        setShareMessage(payload.textWithUrl ?? payload.text)
       }
     } catch {
       setShareMessage('Share canceled or unavailable.')
@@ -1015,6 +1019,25 @@ export default function Home() {
     : ''
   const artistWikiHref =
     artistMeta?.wiki_summary_url || art.wiki_artist_summary_url || fallbackArtistWikiUrl
+  const hintPool = [
+    `✦ Clue: This artwork can be seen in ${museumClue || 'unknown venues'}`,
+    `✦ Painted in ${art.year ?? 'unknown year'}`,
+    `✦ Movement: ${artistMeta?.movement || 'not documented'}`,
+    `✦ Nationality: ${artistMeta?.country || 'not documented'}`,
+  ]
+  const hintsToShow = hintPool.slice(
+    0,
+    Math.min(attemptsHistory.length, hintPool.length)
+  )
+  const shouldRevealInitial =
+    attemptsHistory.length >= maxAttempts - 1 && !!art.artist?.trim()
+  const initialLetter = shouldRevealInitial
+    ? art.artist.trim().charAt(0).toUpperCase()
+    : ''
+  const initialLetterHint =
+    shouldRevealInitial && initialLetter
+      ? `✦ First name starts with: ${initialLetter}`
+      : null
 
   const renderAttempts = (
     containerClass = 'mt-6 w-full max-w-[360px]',
@@ -1307,7 +1330,7 @@ export default function Home() {
   const outcomeSubline = finished
     ? success
       ? 'See you tomorrow'
-      : 'Better luck tomorrow'
+      : 'Discover more below'
     : ''
   const streakBadge =
     playStats?.currentStreak && playStats.currentStreak >= 2
@@ -1394,17 +1417,13 @@ export default function Home() {
         .frame-outer {
           background-color: transparent;
           border-color: rgba(148, 163, 184, 0.35);
-          box-shadow:
-            inset 0 0 0 1px rgba(148, 163, 184, 0.45),
-            0 30px 70px rgba(15, 23, 42, 0.08);
+          box-shadow: 0 30px 70px rgba(15, 23, 42, 0.08);
           position: relative;
         }
         [data-theme='dark'] .frame-outer {
           background-color: transparent;
           border-color: rgba(59, 130, 246, 0.25);
-          box-shadow:
-            inset 0 0 0 1px rgba(59, 130, 246, 0.3),
-            0 30px 70px rgba(2, 6, 23, 0.65);
+          box-shadow: 0 30px 70px rgba(2, 6, 23, 0.65);
         }
         .frame-inner {
           width: 100%;
@@ -1518,7 +1537,7 @@ export default function Home() {
         }
       `}</style>
       <div className="w-full max-w-[420px] relative flex items-center justify-center gap-2 mb-6">
-        <h1 className="text-xl font-normal tracking-tight uppercase">4rtW0rk</h1>
+        <h1 className="text-xl font-normal tracking-tight uppercase">Who painted this?</h1>
         <div className="absolute right-0 flex items-center gap-2">
           <button
             type="button"
@@ -1535,7 +1554,7 @@ export default function Home() {
           )}
         </div>
         <p className="sr-only">
-          Guess the painter in up to five attempts. Each wrong guess gracefully zooms out the artwork to reveal more clues.
+          Can you guess the painter in up to five tries? Each incorrect guess gradually zooms out to reveal more of the artwork.
         </p>
       </div>
 
@@ -1567,8 +1586,8 @@ export default function Home() {
       </div>
 
       {finished && (
-        <div className="mt-2 w-[320px] text-center text-xs text-gray-600">
-          <div className="w-full max-w-[360px] rounded-2xl p-4 text-center space-y-1 result-card answer-card">
+        <div className="mt-5 w-[320px] text-center text-xs text-gray-600">
+          <div className="w-full max-w-[360px] rounded-2xl p-4 text-center space-y- result-card answer-card">
             <p className="text-sm tracking-tight answer-title">{art.title}</p>
             <p className="text-sm tracking-tight answer-subtitle">
               by <span className="answer-artist font-semibold">{art.artist}</span>
@@ -1690,19 +1709,10 @@ export default function Home() {
             <p className="font-mono text-sm text-gray-800 text-center tracking-[0.12em]">
               {shareGlyphs}
             </p>
-            {attemptsHistory.length >= 1 && (
-              <p>
-                ✦ Clue: This artwork can be seen in {museumClue || 'unknown venues'}
-              </p>
-            )}
-            {attemptsHistory.length >= 3 && (
-              <p>✦ Painted in {art.year}</p>
-            )}
-            {attemptsHistory.length >= maxAttempts - 1 && (
-              <p>
-                ✦ Movement: {artistMeta?.movement || 'not documented'}
-              </p>
-            )}
+            {hintsToShow.map((hint) => (
+              <p key={hint}>{hint}</p>
+            ))}
+            {initialLetterHint && <p>{initialLetterHint}</p>}
           </div>
           <button
             type="button"
@@ -1888,16 +1898,15 @@ export default function Home() {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-6">
           <div className="max-w-sm w-full bg-white border border-gray-200 rounded-2xl p-5 text-sm text-gray-700 space-y-3 shadow-2xl">
             <p className="text-xs uppercase tracking-wide text-gray-500">How it works</p>
-            <p>
-              Guess the painter in up to five attempts. Each wrong guess zooms out to reveal more of the
-              artwork.
-            </p>
-            <ul className="text-xs text-gray-600 space-y-1 list-disc list-inside">
-              <li>Start from a tight detail</li>
-              <li>Type an artist&apos;s name.</li>
-              <li>Hints appear as you miss: venue clues, era, movement &amp; country comparisons.</li>
-              <li>The image de-zooms until the full painting is unveiled.</li>
-            </ul>
+			<p>
+			  Guess the painter in up to five tries. Each wrong guess zooms out the image, revealing more of the artwork.
+			</p>
+			<ul className="text-xs text-gray-600 space-y-1 list-disc list-inside">
+			  <li>Start by looking at a tight detail of the painting.</li>
+			  <li>Type the name of the artist you think painted it.</li>
+				  <li>Each wrong guess unlocks the next hint in this order: venue, era, art movement, nationality, and, on your final guess, the artist's first letter.</li>
+			  <li>The image de-zooms until the full painting is fully revealed.</li>
+			</ul>
             <div className="flex justify-end">
               <button
                 type="button"

@@ -58,3 +58,8 @@ body {
 .card-foreground {
   color: var(--card-foreground);
 }
+
+.zoomable-artwork-image {
+  width: 100% !important;
+  height: auto !important;
+}

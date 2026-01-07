@@ -4,22 +4,22 @@ import ArchiveContent, { type ArchiveArtwork } from './ArchiveContent'
 
 const ARCHIVE_DESCRIPTION =
   'Archive Explorations curates the 30 newest painter-guessing puzzles—dig into their clues, revisit famous canvases, and return to today’s challenge with a single tap.'
-const BASE_URL = 'https://4rtw0rk.vercel.app'
+const BASE_URL = 'https://whopaintedthis.vercel.app'
 
 export const metadata = {
-  title: 'Archive Explorations | 4rtW0rk',
+  title: 'Archive Explorations | Who painted this?',
   description: ARCHIVE_DESCRIPTION,
-  keywords: ['art puzzles', 'daily art game', 'archive', '4rtW0rk', 'artist guessing'],
+  keywords: ['art puzzles', 'daily art game', 'archive', 'who painted this', 'artist guessing'],
   openGraph: {
-    title: 'Archive Explorations | 4rtW0rk',
+    title: 'Archive Explorations | Who painted this?',
     description: ARCHIVE_DESCRIPTION,
     url: `${BASE_URL}/archive`,
     type: 'website',
-    siteName: '4rtW0rk',
+    siteName: 'Who painted this?',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Archive Explorations | 4rtW0rk',
+    title: 'Archive Explorations | Who painted this?',
     description: ARCHIVE_DESCRIPTION,
   },
   metadataBase: new URL(BASE_URL),

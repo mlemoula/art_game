@@ -184,13 +184,17 @@ export default function ZoomableImage({
         draggable={false}
         onLoadingComplete={handleLoadingComplete}
         onError={handleError}
+        className="zoomable-artwork-image"
         alt={alt}
         style={{
           width: '100%',
-          height: '100%',
+          height: 'auto',
           pointerEvents: 'none',
           objectFit: fit,
           objectPosition: `${detailX} ${detailY}`,
+          display: 'block',
+          backgroundColor: 'transparent',
+          marginLeft: '-2px',
           willChange: 'transform',
           transformOrigin: `${detailX} ${detailY}`,
         }}
