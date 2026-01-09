@@ -241,7 +241,11 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
         const available = Array.isArray(payload?.availableDates) ? payload.availableDates : []
         if (available.length) {
           setAvailableDates(
-            new Set(available.filter((date): date is string => Boolean(date)))
+            new Set(
+              available.filter(
+                (date: string | null | undefined): date is string => Boolean(date)
+              )
+            )
           )
           return
         }
