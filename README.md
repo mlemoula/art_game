@@ -41,6 +41,14 @@ That downloads each `image_url`, converts it to WebP, uploads it into your bucke
 
 3. Repeat step 2 whenever you refresh the CSV so the cache stays in sync. Because the script filters on `cached_image_url IS NULL`, subsequent runs finish quickly and only pick up work that still needs to be done.
 
+4. Clean up outdated cache entries on a regular cadence (e.g., weekly). Run:
+
+```
+npm run cleanup:image-cache
+```
+
+That script deletes each cached object created for puzzles older than 31 days, clears the `cached_image_url`/`cached_image_generated_at` columns, and removes the matching entry from `src/data/generatedArtImages.json` so the UI can fall back to the canonical Wikimedia downloads.
+
 ## Growth checklist
 
 1. Build content that attracts searches: add a public “Archive” page listing past puzzles + artist blurbs so Google can index “daily art quiz” style queries and link to the home quiz.

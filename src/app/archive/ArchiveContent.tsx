@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
@@ -104,6 +104,15 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
   const { theme, toggleTheme, hydrated } = useTheme()
   const [userScores, setUserScores] = useState<UserScoreMap>({})
   const [localScores, setLocalScores] = useState<UserScoreMap>({})
+  const [availableDates, setAvailableDates] = useState<Set<string> | null>(null)
+  const validDates = useMemo(
+    () =>
+      artworks
+        .map((art) => art.date)
+        .filter((date): date is string => Boolean(date)),
+    [artworks]
+  )
+  const validDatesKey = validDates.join(',')
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -209,6 +218,53 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
     }
   }, [artworks])
 
+  useEffect(() => {
+    if (!validDatesKey) {
+      return
+    }
+    const controller = new AbortController()
+    let cancelled = false
+    const queryParams = new URLSearchParams()
+    queryParams.set('dates', validDatesKey)
+    const requestDates = validDatesKey.split(',')
+    const url = `/api/archive/availability?${queryParams.toString()}`
+
+    fetch(url, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(response.statusText || 'Failed to load availability')
+        }
+        return response.json()
+      })
+      .then((payload) => {
+        if (cancelled) return
+        const available = Array.isArray(payload?.availableDates) ? payload.availableDates : []
+        if (available.length) {
+          setAvailableDates(
+            new Set(available.filter((date): date is string => Boolean(date)))
+          )
+          return
+        }
+        setAvailableDates(new Set())
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.error('Unable to fetch archive availability', error)
+        setAvailableDates(new Set(requestDates))
+      })
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [validDatesKey])
+
+  const filteredArtworks = useMemo(() => {
+    if (!availableDates) return artworks
+    if (!availableDates.size) return []
+    return artworks.filter((art) => (art.date ? availableDates.has(art.date) : true))
+  }, [artworks, availableDates])
+
   return (
     <div
       suppressHydrationWarning
@@ -245,7 +301,7 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
           </h1>
         </header>
         <div className="grid gap-4 md:grid-cols-2">
-          {artworks.map((art) => {
+          {filteredArtworks.map((art) => {
             const userSummary = userScores[art.id]
             const localSummary = localScores[art.id]
             const effectiveSummary = pickPreferredSummary(userSummary, localSummary)
@@ -349,6 +405,11 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
             )
           })}
         </div>
+        {filteredArtworks.length === 0 && artworks.length > 0 ? (
+          <p className="text-center text-sm card-muted">
+            Retired puzzles no longer appear in this list.
+          </p>
+        ) : null}
       </div>
     </div>
   )

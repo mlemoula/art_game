@@ -775,11 +775,11 @@ export default function Home() {
   }
 
   const tierCandidates: Record<QualityTier, string[]> = {
-    detail: buildCandidates(cachedArtSrc, hd, mediumCandidate, baseSrc),
-    medium: buildCandidates(cachedArtSrc, hd, mediumCandidate, baseSrc),
+    detail: buildCandidates(hd, cachedArtSrc, mediumCandidate, baseSrc),
+    medium: buildCandidates(hd, cachedArtSrc, mediumCandidate, baseSrc),
     wide: buildCandidates(
-      cachedArtSrc,
       hd,
+      cachedArtSrc,
       mediumCandidate,
       wideCandidate,
       baseSrc
@@ -1562,11 +1562,10 @@ export default function Home() {
       <div className={frameOuterClass}>
         <div className={frameInnerClass}>
           {isDisplayReady && displaySrc ? (
-            <ZoomableImage
-              key={displaySrc}
-              src={displaySrc}
-              fallbackSrc={fallbackRemote}
-              width={400}
+          <ZoomableImage
+            src={displaySrc}
+            fallbackSrc={fallbackRemote}
+            width={400}
               height={300}
               attempts={displayAttempts}
               maxAttempts={maxAttempts}
@@ -1904,7 +1903,7 @@ export default function Home() {
 			<ul className="text-xs text-gray-600 space-y-1 list-disc list-inside">
 			  <li>Start by looking at a tight detail of the painting.</li>
 			  <li>Type the name of the artist you think painted it.</li>
-				  <li>Each wrong guess unlocks the next hint in this order: venue, era, art movement, nationality, and, on your final guess, the artist's first letter.</li>
+				  <li>Each wrong guess unlocks the next hint in this order: venue, era, art movement, nationality, and, on your final guess, the artist&apos;s first letter.</li>
 			  <li>The image de-zooms until the full painting is fully revealed.</li>
 			</ul>
             <div className="flex justify-end">
