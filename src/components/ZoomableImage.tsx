@@ -19,6 +19,7 @@ interface Props {
   sizes?: string
   alt?: string
   fallbackSrc?: string
+  initialAspectRatio?: number | null
 }
 
 export default function ZoomableImage({
@@ -35,6 +36,7 @@ export default function ZoomableImage({
   revealProgress = 0,
   alt = 'Artwork preview',
   fallbackSrc,
+  initialAspectRatio = null,
 }: Props) {
   // Zoom : 0 essais -> zoom max (≈4.6x), maxAttempts -> 1x
   const safeMaxAttempts = Math.max(maxAttempts, 1)
@@ -52,7 +54,9 @@ export default function ZoomableImage({
   const targetZoom = minZoom + eased * (maxZoom - minZoom)
   const zoom = fit === 'contain' ? 1 : targetZoom
   const baseRatio = width / height || 1
-  const [naturalRatio, setNaturalRatio] = useState<number | null>(null)
+  const [naturalRatio, setNaturalRatio] = useState<number | null>(
+    initialAspectRatio ?? null
+  )
   const [maxContainerWidth, setMaxContainerWidth] = useState<number>(() => {
     if (typeof window === 'undefined') return width
     return Math.min(width, window.innerWidth - 32)
@@ -102,6 +106,10 @@ export default function ZoomableImage({
     window.addEventListener('resize', computeSize)
     return () => window.removeEventListener('resize', computeSize)
   }, [width, height])
+
+  useEffect(() => {
+    setNaturalRatio(initialAspectRatio ?? null)
+  }, [src, initialAspectRatio])
 
   const handleLoadingComplete = (result: {
     naturalWidth?: number

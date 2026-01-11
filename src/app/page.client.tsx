@@ -152,6 +152,7 @@ const cleanArtistIntroParagraphs = (paragraphs: string[]) =>
 export default function Home() {
   const [art, setArt] = useState<DailyArt | null>(null)
   const [imageReady, setImageReady] = useState(false)
+  const [initialAspectRatio, setInitialAspectRatio] = useState<number | null>(null)
   const [hdLoaded, setHdLoaded] = useState(false)
   const [mediumLoaded, setMediumLoaded] = useState(false)
   const [guess, setGuess] = useState('')
@@ -628,36 +629,44 @@ export default function Home() {
   useEffect(() => {
     if (!baseSrc) {
       setImageReady(false)
+      setInitialAspectRatio(null)
       return
     }
 
     let cancelled = false
     setImageReady(false)
+    setInitialAspectRatio(null)
     const img = new Image()
     img.src = baseSrc
 
-    const markReady = () => {
-      if (!cancelled) setImageReady(true)
+    const finalize = () => {
+      if (cancelled) return
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        setInitialAspectRatio(img.naturalWidth / img.naturalHeight)
+      } else {
+        setInitialAspectRatio(null)
+      }
+      setImageReady(true)
     }
 
     const decodeOrResolve = () => {
       if (typeof img.decode === 'function') {
         img
           .decode()
-          .then(markReady)
-          .catch(markReady)
+          .then(finalize)
+          .catch(finalize)
       } else {
-        markReady()
+        finalize()
       }
     }
 
-    if (img.complete && img.naturalWidth > 0) {
+    if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
       decodeOrResolve()
       return
     }
 
     img.onload = decodeOrResolve
-    img.onerror = markReady
+    img.onerror = finalize
 
     return () => {
       cancelled = true
@@ -1579,6 +1588,7 @@ export default function Home() {
               width={ZOOMABLE_IMAGE_WIDTH}
               height={ZOOMABLE_IMAGE_HEIGHT}
               sizes={ZOOMABLE_IMAGE_SIZES}
+              initialAspectRatio={initialAspectRatio}
               attempts={displayAttempts}
               maxAttempts={maxAttempts}
               detailX="50%"
