@@ -1,9 +1,9 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import Image from 'next/image'
+import NextImage from 'next/image'
 import { motion } from 'framer-motion'
 
-const MotionImage = motion(Image)
+const MotionImage = motion(NextImage)
 
 interface Props {
   src: string
@@ -107,9 +107,28 @@ export default function ZoomableImage({
     return () => window.removeEventListener('resize', computeSize)
   }, [width, height])
 
+  const [renderedSrc, setRenderedSrc] = useState(src)
+
   useEffect(() => {
-    setNaturalRatio(initialAspectRatio ?? null)
-  }, [src, initialAspectRatio])
+    if (!src || src === renderedSrc || typeof window === 'undefined') return
+    let cancelled = false
+    const img = document.createElement('img')
+    img.src = src
+    const commit = () => {
+      if (!cancelled) {
+        setRenderedSrc(src)
+      }
+    }
+    if (img.complete && img.naturalWidth > 0) {
+      commit()
+      return
+    }
+    img.onload = commit
+    img.onerror = commit
+    return () => {
+      cancelled = true
+    }
+  }, [src, renderedSrc])
 
   const handleLoadingComplete = (result: {
     naturalWidth?: number
@@ -119,18 +138,14 @@ export default function ZoomableImage({
       setNaturalRatio(result.naturalWidth / result.naturalHeight)
     }
   }
-  const [activeSrc, setActiveSrc] = useState(src)
-  useEffect(() => {
-    setActiveSrc(src)
-  }, [src])
 
   const handleError = () => {
-    if (fallbackSrc && fallbackSrc !== activeSrc) {
-      setActiveSrc(fallbackSrc)
+    if (fallbackSrc && fallbackSrc !== renderedSrc) {
+      setRenderedSrc(fallbackSrc)
     }
   }
 
-  const containerRatio = naturalRatio || baseRatio
+  const containerRatio = naturalRatio ?? initialAspectRatio ?? baseRatio
 
   const computeWrapperSize = () => {
     let widthBound = maxContainerWidth
@@ -182,7 +197,7 @@ export default function ZoomableImage({
       }}
     >
       <MotionImage
-        src={activeSrc}
+        src={renderedSrc}
         sizes={sizes}
         width={width}
         height={height}
@@ -192,6 +207,7 @@ export default function ZoomableImage({
         draggable={false}
         onLoadingComplete={handleLoadingComplete}
         onError={handleError}
+        unoptimized
         className="zoomable-artwork-image"
         alt={alt}
         style={{
@@ -205,6 +221,7 @@ export default function ZoomableImage({
           marginLeft: '-2px',
           willChange: 'transform',
           transformOrigin: `${detailX} ${detailY}`,
+          transition: 'transform 150ms ease-out, color 120ms ease-out',
         }}
         initial={{ scale: zoom }}
         animate={{ scale: zoom }}

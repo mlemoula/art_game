@@ -42,8 +42,11 @@ type ArtworkMetadata = {
   year: string | null
 }
 
-const fetchArtworkMetadata = async (date: string): Promise<ArtworkMetadata | null> => {
+const fetchArtworkMetadata = async (date: string | null): Promise<ArtworkMetadata | null> => {
   try {
+    if (!date) {
+      return null
+    }
     const { data, error } = await supabase
       .from('daily_art')
       .select('title, artist, year')
@@ -86,8 +89,13 @@ const BASE_METADATA: Metadata = {
 export async function buildMetadataForDate(date?: string): Promise<Metadata> {
   const { targetDate, canonicalDate } = resolveTargetDate(date)
   const artMetadata = await fetchArtworkMetadata(targetDate)
+  const shareTitle = artMetadata
+    ? `Who painted this? · ${artMetadata.title}`
+    : DEFAULT_TITLE
   const metadataTitle = artMetadata
-    ? `${artMetadata.title} · ${artMetadata.artist}`
+    ? `${artMetadata.title} by ${artMetadata.artist}${
+        artMetadata.year ? ` (${artMetadata.year})` : ''
+      } · Who painted this?`
     : DEFAULT_TITLE
   const metadataDescription = artMetadata
     ? `${artMetadata.title} by ${artMetadata.artist}${
@@ -103,15 +111,15 @@ export async function buildMetadataForDate(date?: string): Promise<Metadata> {
     description: metadataDescription,
     openGraph: {
       ...BASE_METADATA.openGraph,
-      title: metadataTitle,
-      description: metadataDescription,
+      title: shareTitle,
+      description: DEFAULT_DESCRIPTION,
       url,
       images: [{ url: image, width: 1200, height: 630 }],
     },
     twitter: {
       ...BASE_METADATA.twitter,
-      title: metadataTitle,
-      description: metadataDescription,
+      title: shareTitle,
+      description: DEFAULT_DESCRIPTION,
       images: image,
     },
   }

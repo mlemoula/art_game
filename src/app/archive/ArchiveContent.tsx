@@ -297,7 +297,10 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
             {hydrated ? (
               <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} />
             ) : (
-              <span className="inline-flex h-6 w-12 rounded-full border border-transparent" aria-hidden="true" />
+              <span
+                className="inline-flex h-6 w-12 rounded-full border border-transparent"
+                aria-hidden="true"
+              />
             )}
           </div>
           <h1 className="text-base font-semibold tracking-[0.35em] uppercase text-slate-400 dark:text-slate-300">

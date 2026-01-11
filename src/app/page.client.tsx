@@ -89,7 +89,7 @@ const DETAIL_SOURCE_THUMB_WIDTH = 1400
 const DETAIL_SOURCE_MEDIUM_WIDTH = 2200
 const ZOOMABLE_IMAGE_WIDTH = 1200
 const ZOOMABLE_IMAGE_HEIGHT = 900
-const ZOOMABLE_IMAGE_SIZES = '(max-width: 640px) 90vw, 1200px'
+const ZOOMABLE_IMAGE_SIZES = '1200px'
 
 type FeedbackStatus = 'match' | 'earlier' | 'later' | 'different' | 'info' | 'missing'
 
@@ -636,7 +636,7 @@ export default function Home() {
     let cancelled = false
     setImageReady(false)
     setInitialAspectRatio(null)
-    const img = new Image()
+    const img = document.createElement('img')
     img.src = baseSrc
 
     const finalize = () => {
@@ -681,7 +681,7 @@ export default function Home() {
     }
     let cancelled = false
     setHdLoaded(false)
-    const img = new Image()
+    const img = document.createElement('img')
     img.src = hd
     const handleDone = () => {
       if (!cancelled) setHdLoaded(true)
@@ -721,7 +721,7 @@ export default function Home() {
     }
     let cancelled = false
     setMediumLoaded(false)
-    const img = new Image()
+    const img = document.createElement('img')
     img.src = medium
     const finish = () => {
       if (!cancelled) setMediumLoaded(true)
@@ -814,10 +814,20 @@ export default function Home() {
     }
     return ''
   }
+  const [activeDisplaySrc, setActiveDisplaySrc] = useState<string>('')
   const displaySrc = selectSrcForTier(qualityTier)
   const displayAttempts = finished ? maxAttempts : attemptsCount
-  const srcReady = Boolean(displaySrc && isSrcReady(displaySrc))
-  const isDisplayReady = Boolean(displaySrc && srcReady)
+  const effectiveDisplaySrc = displaySrc || activeDisplaySrc
+
+  useEffect(() => {
+    setActiveDisplaySrc('')
+  }, [artId])
+
+  useEffect(() => {
+    if (displaySrc) {
+      setActiveDisplaySrc(displaySrc)
+    }
+  }, [displaySrc])
 
   useEffect(() => {
     if (!finished || !artId || !userToken || playSaved || !attemptsHistory.length)
@@ -1361,10 +1371,11 @@ export default function Home() {
   const frameInnerClass = finished
     ? 'frame-inner w-full h-full overflow-hidden rounded-[26px]'
     : 'frame-inner w-full h-full overflow-hidden rounded-2xl'
+  const placeholderAspectRatio = initialAspectRatio ?? 4 / 3
 
   return (
     <main
-      className="flex flex-col items-center px-4 sm:px-6 py-4 min-h-screen bg-white text-gray-900 font-mono"
+      className="relative flex flex-col items-center px-4 sm:px-6 py-4 min-h-screen bg-white text-gray-900 font-mono"
       data-theme={theme}
       role="main"
     >
@@ -1581,9 +1592,9 @@ export default function Home() {
       {/* Affiche placeholder jusqu'à ce que l'image jouable soit prête */}
       <div className={frameOuterClass}>
         <div className={frameInnerClass}>
-          {isDisplayReady && displaySrc ? (
+          {effectiveDisplaySrc ? (
             <ZoomableImage
-              src={displaySrc}
+              src={effectiveDisplaySrc}
               fallbackSrc={fallbackRemote}
               width={ZOOMABLE_IMAGE_WIDTH}
               height={ZOOMABLE_IMAGE_HEIGHT}
@@ -1599,7 +1610,10 @@ export default function Home() {
               alt={art ? `${art.title} par ${art.artist}` : 'Artwork du jour'}
             />
           ) : (
-            <div className="w-full aspect-[4/3] flex items-center justify-center text-gray-500 text-xs tracking-wide bg-gray-50">
+            <div
+              className="w-full flex items-center justify-center text-gray-500 text-xs tracking-wide bg-gray-50"
+              style={{ aspectRatio: placeholderAspectRatio }}
+            >
               Loading…
             </div>
           )}
@@ -1806,40 +1820,9 @@ export default function Home() {
             </button>
             {shareMessage && <p className="text-[10px] text-gray-500">{shareMessage}</p>}
             <div className="pt-3 border-t border-gray-100 space-y-3">
-              {playStats ? (
-                <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3 stats-panel">
-                  <p className="text-[10px] uppercase tracking-[0.35em] text-gray-400">Your stats</p>
-                  <dl className="mt-2 space-y-1 text-[11px] text-gray-600">
-                    <div className="flex justify-between">
-                      <dt>Total plays</dt>
-                      <dd className="text-gray-900">{playStats.total}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt>Wins</dt>
-                      <dd className="text-gray-900">{playStats.wins}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt>Current streak</dt>
-                      <dd className="text-gray-900">{playStats.currentStreak}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt>Best streak</dt>
-                      <dd className="text-gray-900">{playStats.bestStreak}</dd>
-                    </div>
-                    {typeof playStats.fastestWin === 'number' && (
-                      <div className="flex justify-between">
-                        <dt>Fastest solve</dt>
-                        <dd className="text-gray-900">
-                          {playStats.fastestWin} attempt{playStats.fastestWin === 1 ? '' : 's'}
-                        </dd>
-                      </div>
-                    )}
-                  </dl>
-                </div>
-              ) : null}
-              {communityStats ? (
-                <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3 stats-panel">
-                  <p className="text-[10px] uppercase tracking-[0.35em] text-gray-400">Community stats</p>
+            {communityStats ? (
+              <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3 stats-panel">
+                <p className="text-[10px] uppercase tracking-[0.35em] text-gray-400">Community stats</p>
                   <p className="mt-2 text-[11px] text-gray-600">
                     {communityStats.total === 1
                       ? '1 person has played today'
