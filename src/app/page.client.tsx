@@ -85,6 +85,12 @@ interface DailyArt {
   wiki_artist_summary_url?: string | null
 }
 
+const DETAIL_SOURCE_THUMB_WIDTH = 1400
+const DETAIL_SOURCE_MEDIUM_WIDTH = 2200
+const ZOOMABLE_IMAGE_WIDTH = 1200
+const ZOOMABLE_IMAGE_HEIGHT = 900
+const ZOOMABLE_IMAGE_SIZES = '(max-width: 640px) 90vw, 1200px'
+
 type FeedbackStatus = 'match' | 'earlier' | 'later' | 'different' | 'info' | 'missing'
 
 interface FeedbackDetail {
@@ -314,10 +320,14 @@ export default function Home() {
     art?.cached_image_url ||
     (art ? generatedArtImageCache[art.image_url] ?? '' : '')
   const mediaUrls = art
-    ? getWikimediaUrls(art.image_url)
+    ? getWikimediaUrls(
+        art.image_url,
+        DETAIL_SOURCE_THUMB_WIDTH,
+        DETAIL_SOURCE_MEDIUM_WIDTH
+      )
     : { thumb: '', medium: '', hd: '' }
   const { thumb, medium, hd } = mediaUrls
-  const baseSrc = thumb || medium || hd || ''
+  const baseSrc = medium || thumb || hd || ''
   const attemptsCount = attemptsHistory.length
   const revealProgress = Math.min(
     1,
@@ -1344,9 +1354,10 @@ export default function Home() {
     : 'frame-inner w-full h-full overflow-hidden rounded-2xl'
 
   return (
-    <div
+    <main
       className="flex flex-col items-center px-4 sm:px-6 py-4 min-h-screen bg-white text-gray-900 font-mono"
       data-theme={theme}
+      role="main"
     >
       <style jsx global>{`
         @keyframes confetti-fall {
@@ -1562,11 +1573,12 @@ export default function Home() {
       <div className={frameOuterClass}>
         <div className={frameInnerClass}>
           {isDisplayReady && displaySrc ? (
-          <ZoomableImage
-            src={displaySrc}
-            fallbackSrc={fallbackRemote}
-            width={400}
-              height={300}
+            <ZoomableImage
+              src={displaySrc}
+              fallbackSrc={fallbackRemote}
+              width={ZOOMABLE_IMAGE_WIDTH}
+              height={ZOOMABLE_IMAGE_HEIGHT}
+              sizes={ZOOMABLE_IMAGE_SIZES}
               attempts={displayAttempts}
               maxAttempts={maxAttempts}
               detailX="50%"
@@ -1938,6 +1950,6 @@ export default function Home() {
         </Link>
       </div>
       <Analytics />
-    </div>
+    </main>
   )
 }
