@@ -1056,12 +1056,17 @@ export default function Home() {
     : ''
   const artistWikiHref =
     artistMeta?.wiki_summary_url || art.wiki_artist_summary_url || fallbackArtistWikiUrl
+  const titleHint =
+    art.title && art.title.trim()
+      ? `✦ Title: ${art.title.trim()}`
+      : null
+  const paintingLocationHint = `✦ This artwork painted in ${art.year ?? 'unknown year'} can be seen in ${museumClue || 'unknown venues'}`
+  const movementHint = `✦ Movement: ${artistMeta?.movement || 'not documented'}`
   const hintPool = [
-    `✦ Clue: This artwork can be seen in ${museumClue || 'unknown venues'}`,
-    `✦ Painted in ${art.year ?? 'unknown year'}`,
-    `✦ Movement: ${artistMeta?.movement || 'not documented'}`,
-    `✦ Nationality: ${artistMeta?.country || 'not documented'}`,
-  ]
+    paintingLocationHint,
+    movementHint,
+    titleHint,
+  ].filter((hint): hint is string => Boolean(hint))
   const hintsToShow = hintPool.slice(
     0,
     Math.min(attemptsHistory.length, hintPool.length)
@@ -1375,10 +1380,10 @@ export default function Home() {
       : null
   const frameOuterClass = finished
     ? 'frame-outer w-full sm:w-auto rounded-none border border-slate-200 shadow-sm transition-all duration-300 mx-auto overflow-hidden p-3 sm:p-4'
-    : 'frame-outer w-full max-w-[420px] rounded-[28px] border border-slate-200 transition-all duration-300 overflow-hidden p-2'
+    : 'frame-outer w-full max-w-[420px] rounded-none border border-slate-200 transition-all duration-300 overflow-hidden p-2'
   const frameInnerClass = finished
     ? 'frame-inner w-full h-full overflow-hidden rounded-none'
-    : 'frame-inner w-full h-full overflow-hidden rounded-2xl'
+    : 'frame-inner w-full h-full overflow-hidden rounded-none'
   const placeholderAspectRatio = initialAspectRatio ?? 4 / 3
   const frameOuterStyle: CSSProperties | undefined = finished
     ? { maxWidth: 'min(95vw, 1200px)' }
@@ -1751,9 +1756,9 @@ export default function Home() {
           >
             Submit
           </button>
-          <div className="text-[11px] text-gray-500 text-center space-y-1">
-            <p className="font-mono text-sm text-gray-800 text-center tracking-[0.12em]">
-              {shareGlyphs}
+          <div className="text-[11px] text-gray-500 space-y-1">
+            <p>
+              Clues:
             </p>
             {hintsToShow.map((hint) => (
               <p key={hint}>{hint}</p>
