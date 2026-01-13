@@ -1,6 +1,14 @@
 'use client'
 import Link from 'next/link'
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  CSSProperties,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { Analytics } from '@vercel/analytics/next'
 import ZoomableImage from '@/components/ZoomableImage'
 import ThemeToggleButton from '@/components/ThemeToggleButton'
@@ -1366,12 +1374,15 @@ export default function Home() {
       ? `${playStats.currentStreak}-day streak`
       : null
   const frameOuterClass = finished
-    ? 'frame-outer w-full sm:w-auto max-w-[420px] rounded-[32px] border border-slate-200 shadow-sm transition-all duration-300 mx-auto overflow-hidden p-3 sm:p-4'
+    ? 'frame-outer w-full sm:w-auto rounded-none border border-slate-200 shadow-sm transition-all duration-300 mx-auto overflow-hidden p-3 sm:p-4'
     : 'frame-outer w-full max-w-[420px] rounded-[28px] border border-slate-200 transition-all duration-300 overflow-hidden p-2'
   const frameInnerClass = finished
-    ? 'frame-inner w-full h-full overflow-hidden rounded-[26px]'
+    ? 'frame-inner w-full h-full overflow-hidden rounded-none'
     : 'frame-inner w-full h-full overflow-hidden rounded-2xl'
   const placeholderAspectRatio = initialAspectRatio ?? 4 / 3
+  const frameOuterStyle: CSSProperties | undefined = finished
+    ? { maxWidth: 'min(95vw, 1200px)' }
+    : undefined
 
   return (
     <main
@@ -1590,7 +1601,7 @@ export default function Home() {
       </div>
 
       {/* Affiche placeholder jusqu'à ce que l'image jouable soit prête */}
-      <div className={frameOuterClass}>
+      <div className={frameOuterClass} style={frameOuterStyle}>
         <div className={frameInnerClass}>
           {effectiveDisplaySrc ? (
             <ZoomableImage
