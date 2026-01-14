@@ -38,7 +38,6 @@ export default function ZoomableImage({
   fallbackSrc,
   initialAspectRatio = null,
 }: Props) {
-  // Zoom : 0 essais -> zoom max (≈4.6x), maxAttempts -> 1x
   const safeMaxAttempts = Math.max(maxAttempts, 1)
   const clampedAttempts = Math.min(Math.max(attempts, 0), safeMaxAttempts)
   const revealClamped = Math.min(Math.max(revealProgress, 0), 1)
@@ -218,7 +217,6 @@ export default function ZoomableImage({
           objectPosition: `${detailX} ${detailY}`,
           display: 'block',
           backgroundColor: 'transparent',
-          marginLeft: '-2px',
           willChange: 'transform',
           transformOrigin: `${detailX} ${detailY}`,
           transition: 'transform 150ms ease-out, color 120ms ease-out',
