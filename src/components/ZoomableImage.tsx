@@ -56,6 +56,9 @@ export default function ZoomableImage({
   const [naturalRatio, setNaturalRatio] = useState<number | null>(
     initialAspectRatio ?? null
   )
+  const detailFocusPosition = `${detailX} ${detailY}`
+  const centerFocusPosition = '50% 50%'
+  const shouldCenterImage = fit === 'contain'
   const [maxContainerWidth, setMaxContainerWidth] = useState<number>(() => {
     if (typeof window === 'undefined') return width
     return Math.min(width, window.innerWidth - 32)
@@ -214,11 +217,16 @@ export default function ZoomableImage({
           height: 'auto',
           pointerEvents: 'none',
           objectFit: fit,
-          objectPosition: `${detailX} ${detailY}`,
+          objectPosition: shouldCenterImage
+            ? centerFocusPosition
+            : detailFocusPosition,
           display: 'block',
+          margin: '0 auto',
           backgroundColor: 'transparent',
           willChange: 'transform',
-          transformOrigin: `${detailX} ${detailY}`,
+          transformOrigin: shouldCenterImage
+            ? centerFocusPosition
+            : detailFocusPosition,
           transition: 'transform 150ms ease-out, color 120ms ease-out',
         }}
         initial={{ scale: zoom }}

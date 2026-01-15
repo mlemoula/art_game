@@ -1080,6 +1080,7 @@ export default function Home() {
     shouldRevealInitial && initialLetter
       ? `✦ First name starts with: ${initialLetter}`
       : null
+  const hasClues = hintsToShow.length > 0 || Boolean(initialLetterHint)
 
   const renderAttempts = (
     containerClass = 'mt-6 w-full max-w-[360px]',
@@ -1756,15 +1757,17 @@ export default function Home() {
           >
             Submit
           </button>
-          <div className="text-[11px] text-gray-500 space-y-1">
-            <p>
-              Clues:
-            </p>
-            {hintsToShow.map((hint) => (
-              <p key={hint}>{hint}</p>
-            ))}
-            {initialLetterHint && <p>{initialLetterHint}</p>}
-          </div>
+          {hasClues && (
+            <div className="text-[11px] text-gray-500 space-y-1">
+              <p>
+                Clues:
+              </p>
+              {hintsToShow.map((hint) => (
+                <p key={hint}>{hint}</p>
+              ))}
+              {initialLetterHint && <p>{initialLetterHint}</p>}
+            </div>
+          )}
           <button
             type="button"
             onClick={handleGiveUp}
