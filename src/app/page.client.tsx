@@ -1080,7 +1080,10 @@ export default function Home() {
     shouldRevealInitial && initialLetter
       ? `✦ First name starts with: ${initialLetter}`
       : null
-  const hasClues = hintsToShow.length > 0 || Boolean(initialLetterHint)
+  const visibleClues = [...hintsToShow, initialLetterHint].filter(
+    (hint): hint is string => Boolean(hint)
+  )
+  const hasClues = visibleClues.length > 0
 
   const renderAttempts = (
     containerClass = 'mt-6 w-full max-w-[360px]',
@@ -1762,10 +1765,9 @@ export default function Home() {
               <p>
                 Clues:
               </p>
-              {hintsToShow.map((hint) => (
+              {visibleClues.slice().reverse().map((hint) => (
                 <p key={hint}>{hint}</p>
               ))}
-              {initialLetterHint && <p>{initialLetterHint}</p>}
             </div>
           )}
           <button
