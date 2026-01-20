@@ -93,7 +93,7 @@ export async function buildMetadataForDate(date?: string): Promise<Metadata> {
     ? `Who painted this? · ${artMetadata.title}`
     : DEFAULT_TITLE
   const metadataTitle = artMetadata
-    ? `${artMetadata.title} by ${artMetadata.artist}${
+    ? `${artMetadata.title}${
         artMetadata.year ? ` (${artMetadata.year})` : ''
       } · Who painted this?`
     : DEFAULT_TITLE
