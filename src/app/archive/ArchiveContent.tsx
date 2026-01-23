@@ -52,6 +52,65 @@ type UserScoreMap = Record<number, UserPlaySummary>
 const PROGRESS_KEY_PREFIX = 'art-progress-'
 const MAX_ARCHIVE_ATTEMPTS = 5
 
+function ReadMoreArchive() {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className="space-y-3 text-sm" style={{ color: 'var(--card-foreground)' }}>
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        aria-expanded={expanded}
+        className="flex items-center gap-2 text-xs font-normal uppercase tracking-[0.35em] transition-colors hover:text-current focus-visible:text-current"
+        style={{ color: 'inherit' }}
+      >
+        <span className="text-[10px] leading-none" aria-hidden="true">
+          {expanded ? '▼' : '►'}
+        </span>
+        <span>{expanded ? 'Hide archive details' : 'More about the archive'}</span>
+      </button>
+      {expanded ? (
+        <div className="space-y-6">
+          <article className="space-y-2">
+            <h2 className="text-base font-semibold tracking-tight">
+              Explore past art puzzles
+            </h2>
+            <p className="leading-relaxed">
+              Each archived puzzle features a carefully selected painting from art history, ranging
+              from Renaissance masters to modern and contemporary artists. By revisiting these
+              challenges, you can test your visual memory, sharpen your art knowledge, and discover
+              recurring styles across centuries.
+            </p>
+            <p className="leading-relaxed">
+              The archive allows you to explore previous guesses at your own pace. Every puzzle is
+              presented in the same format as the daily challenge, making it easy to jump back in,
+              compare artists, and learn through play.
+            </p>
+          </article>
+
+          <article className="space-y-2">
+            <h2 className="text-base font-semibold tracking-tight">
+              Why use the archive?
+            </h2>
+            <ul className="space-y-1 leading-relaxed">
+              <li>+ Practice identifying painters by style, color, and composition</li>
+              <li>+ Revisit artworks you may have missed</li>
+              <li>+ Learn about famous painters through an interactive game</li>
+              <li>+ Improve your accuracy for future daily challenges</li>
+            </ul>
+          </article>
+
+          <footer className="text-base leading-relaxed">
+            <p>
+              New puzzles are added regularly as part of the daily <strong>Who Painted This?</strong>{' '}
+              game. You can return to today's challenge at any time, or continue browsing the archive
+              to deepen your understanding of art history through playful exploration.
+            </p>
+          </footer>
+        </div>
+      ) : null}
+    </div>
+  )
+}
 const normalizeSuccessFlag = (value: unknown): boolean => {
   if (typeof value === 'boolean') return value
   if (typeof value === 'number') return value === 1
@@ -290,9 +349,10 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
           <div className="flex items-center justify-between gap-4">
             <Link
               href="/"
-              className="text-[10px] uppercase tracking-[0.4em] transition-colors card-link hover:opacity-80"
+              className="inline-flex items-center justify-center rounded-full border border-slate-200 px-3 py-1 text-[10px] uppercase tracking-[0.35em] transition-colors button-hover"
+              style={{ color: 'inherit' }}
             >
-              Back to today’s puzzle
+              Back to today's puzzle
             </Link>
             {hydrated ? (
               <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} />
@@ -303,10 +363,25 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
               />
             )}
           </div>
-          <h1 className="text-base font-semibold tracking-[0.35em] uppercase text-slate-400 dark:text-slate-300">
-            Archive: The 30 most recent artworks.
-          </h1>
         </header>
+        <section
+          aria-labelledby="archive-title"
+          className="space-y-4 text-sm"
+          style={{ color: 'var(--foreground)' }}
+        >
+          <header className="space-y-2">
+            <h1 id="archive-title" className="text-2xl font-semibold tracking-tight">
+              Puzzles archive - Guess the Painter
+            </h1>
+            <p className="text-base">
+              Welcome to the <strong>Who Painted This?</strong> archive. This page gathers the{' '}
+              <strong>30 most recent daily art challenges</strong>, where players try to identify the
+              painter behind a famous artwork using visual clues.
+            </p>
+          </header>
+
+          <ReadMoreArchive />
+        </section>
         <div className="grid gap-4 md:grid-cols-2">
           {filteredArtworks.map((art) => {
             const userSummary = userScores[art.id]
