@@ -102,7 +102,7 @@ function ReadMoreArchive() {
           <footer className="text-base leading-relaxed">
             <p>
               New puzzles are added regularly as part of the daily <strong>Who Painted This?</strong>{' '}
-              game. You can return to today's challenge at any time, or continue browsing the archive
+              game. You can return to today&rsquo;s challenge at any time, or continue browsing the archive
               to deepen your understanding of art history through playful exploration.
             </p>
           </footer>
@@ -352,7 +352,7 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
               className="inline-flex items-center justify-center rounded-full border border-slate-200 px-3 py-1 text-[10px] uppercase tracking-[0.35em] transition-colors button-hover"
               style={{ color: 'inherit' }}
             >
-              Back to today's puzzle
+              Back to today&rsquo;s puzzle
             </Link>
             {hydrated ? (
               <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} />

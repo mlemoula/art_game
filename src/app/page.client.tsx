@@ -37,8 +37,9 @@ const normalizeString = (str: string) =>
 const FALLBACK_ARTISTS: ArtistRecommendation[] = []
 const PROGRESS_KEY_PREFIX = 'art-progress-'
 const DAY_MS = 24 * 60 * 60 * 1000
-
-
+const MOBILE_WIDTH_BREAKPOINT = 768
+const WIKIMEDIA_HEAVY_BYTES_THRESHOLD = 3 * 1024 * 1024
+type ViewportState = 'unknown' | 'mobile' | 'desktop'
 const mergeArtistData = (
   ...lists: Array<ArtistRecommendation[] | undefined>
 ): ArtistRecommendation[] => {
@@ -184,6 +185,9 @@ export default function Home() {
   const { theme, toggleTheme, hydrated } = useTheme()
   const [gaveUp, setGaveUp] = useState(false)
   const [attemptsOpen, setAttemptsOpen] = useState(false)
+  const [viewportState, setViewportState] = useState<ViewportState>('unknown')
+  const [wikimediaSizeBytes, setWikimediaSizeBytes] = useState<number | null>(null)
+  const [wikimediaSizeStatus, setWikimediaSizeStatus] = useState<'idle' | 'loading' | 'done'>('idle')
   const maxAttempts = 5
   const inputRef = useRef<HTMLInputElement | null>(null)
   const blurTimeoutRef = useRef<number | null>(null)
@@ -324,10 +328,20 @@ export default function Home() {
     return () => controller.abort()
   }, [requestArtFromApi])
 
+  const artImageUrl = art?.image_url ?? ''
   const generatedArtImageCache = generatedArtImages as Record<string, string>
   const cachedArtSrc =
     art?.cached_image_url ||
     (art ? generatedArtImageCache[art.image_url] ?? '' : '')
+  const isWikimediaImage = useMemo(() => {
+    if (!artImageUrl) return false
+    try {
+      const parsed = new URL(artImageUrl)
+      return parsed.hostname.endsWith('.wikimedia.org')
+    } catch {
+      return artImageUrl.includes('wikimedia.org')
+    }
+  }, [artImageUrl])
   const mediaUrls = art
     ? getWikimediaUrls(
         art.image_url,
@@ -336,7 +350,77 @@ export default function Home() {
       )
     : { thumb: '', medium: '', hd: '' }
   const { thumb, medium, hd } = mediaUrls
-  const baseSrc = medium || thumb || hd || ''
+  const shouldMeasureWikimediaSize =
+    viewportState === 'mobile' &&
+    isWikimediaImage &&
+    Boolean(artImageUrl) &&
+    !cachedArtSrc
+
+  useEffect(() => {
+    if (!shouldMeasureWikimediaSize) {
+      setWikimediaSizeBytes(null)
+      setWikimediaSizeStatus('done')
+      return
+    }
+    if (typeof window === 'undefined') return
+    let cancelled = false
+    const controller = new AbortController()
+    setWikimediaSizeStatus('loading')
+    setWikimediaSizeBytes(null)
+    fetch(artImageUrl, {
+      method: 'HEAD',
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (cancelled) return
+        const lengthValue = response.headers.get('content-length')
+        const parsedLength =
+          typeof lengthValue === 'string'
+            ? Number.parseInt(lengthValue, 10)
+            : null
+        const safeLength =
+          parsedLength !== null && !Number.isNaN(parsedLength)
+            ? parsedLength
+            : null
+        setWikimediaSizeBytes(safeLength)
+        setWikimediaSizeStatus('done')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setWikimediaSizeBytes(null)
+        setWikimediaSizeStatus('done')
+      })
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [artImageUrl, shouldMeasureWikimediaSize, viewportState])
+
+  const isMeasurementComplete =
+    viewportState !== 'mobile' || wikimediaSizeStatus === 'done'
+  const wikimediaSizeKnown =
+    typeof wikimediaSizeBytes === 'number' && !Number.isNaN(wikimediaSizeBytes)
+  const isHeavyWikimedia =
+    shouldMeasureWikimediaSize &&
+    isMeasurementComplete &&
+    wikimediaSizeKnown &&
+    wikimediaSizeBytes > WIKIMEDIA_HEAVY_BYTES_THRESHOLD
+  const allowHighResForMobile =
+    viewportState !== 'mobile' || (wikimediaSizeKnown && !isHeavyWikimedia)
+  const shouldFallbackToThumbOnMobile =
+    viewportState === 'mobile' && !allowHighResForMobile && Boolean(thumb)
+  const mediumSource = allowHighResForMobile ? medium : undefined
+  const hdSource = allowHighResForMobile ? hd : undefined
+  const baseSrc = cachedArtSrc
+    ? cachedArtSrc
+    : shouldFallbackToThumbOnMobile
+    ? thumb || mediumSource || hdSource || ''
+    : mediumSource ?? thumb ?? hdSource ?? ''
+  const canLoadHdOnMobile =
+    viewportState !== 'mobile' ||
+    (isMeasurementComplete && wikimediaSizeKnown && !isHeavyWikimedia)
+  const shouldLoadHd =
+    viewportState !== 'unknown' && Boolean(hdSource) && canLoadHdOnMobile
   const attemptsCount = attemptsHistory.length
   const revealProgress = Math.min(
     1,
@@ -413,6 +497,20 @@ export default function Home() {
       if (blurTimeoutRef.current && typeof window !== 'undefined') {
         window.clearTimeout(blurTimeoutRef.current)
       }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const updateViewportState = () => {
+      const nextState =
+        window.innerWidth <= MOBILE_WIDTH_BREAKPOINT ? 'mobile' : 'desktop'
+      setViewportState(nextState)
+    }
+    updateViewportState()
+    window.addEventListener('resize', updateViewportState)
+    return () => {
+      window.removeEventListener('resize', updateViewportState)
     }
   }, [])
 
@@ -683,14 +781,14 @@ export default function Home() {
 
   // Précharger HD en arrière-plan pour la révélation finale
   useEffect(() => {
-    if (!hd) {
+    if (!hdSource || !shouldLoadHd) {
       setHdLoaded(false)
       return
     }
     let cancelled = false
     setHdLoaded(false)
     const img = document.createElement('img')
-    img.src = hd
+    img.src = hdSource
     const handleDone = () => {
       if (!cancelled) setHdLoaded(true)
     }
@@ -719,18 +817,18 @@ export default function Home() {
     return () => {
       cancelled = true
     }
-  }, [hd])
+  }, [hdSource, shouldLoadHd])
 
   // Précharger medium pour basculer en douceur
   useEffect(() => {
-    if (!medium) {
+    if (!mediumSource) {
       setMediumLoaded(false)
       return
     }
     let cancelled = false
     setMediumLoaded(false)
     const img = document.createElement('img')
-    img.src = medium
+    img.src = mediumSource
     const finish = () => {
       if (!cancelled) setMediumLoaded(true)
     }
@@ -743,7 +841,7 @@ export default function Home() {
     return () => {
       cancelled = true
     }
-  }, [medium])
+  }, [mediumSource])
   const MIN_SUGGESTION_LENGTH = 2
   const MAX_SUGGESTIONS = 25
   const deferredGuess = useDeferredValue(guess)
@@ -784,9 +882,15 @@ export default function Home() {
     if (zoomProgress < 0.75) return 'medium'
     return 'wide'
   })()
-  const mediumCandidate = medium || baseSrc
-  const fallbackRemote = hd || medium || thumb || baseSrc
-  const wideCandidate = thumb || mediumCandidate
+  const mediumCandidate = shouldFallbackToThumbOnMobile
+    ? thumb || baseSrc
+    : mediumSource ?? baseSrc
+  const fallbackRemote = shouldLoadHd
+    ? hdSource ?? mediumSource ?? baseSrc
+    : baseSrc
+  const wideCandidate = shouldFallbackToThumbOnMobile
+    ? thumb || mediumCandidate
+    : thumb || mediumCandidate
   const buildCandidates = (...items: Array<string | undefined>) =>
     Array.from(
       new Set(items.filter((value): value is string => Boolean(value)))
@@ -795,22 +899,29 @@ export default function Home() {
   const isSrcReady = (candidate: string | null | undefined) => {
     if (!candidate) return false
     if (candidate === cachedArtSrc) return true
-    if (candidate === hd) return hdLoaded
-    if (candidate === medium) return mediumLoaded
+    if (candidate === hdSource) return hdLoaded
+    if (candidate === mediumSource) return mediumLoaded
     if (candidate === mediumCandidate) return mediumLoaded
     return imageReady
   }
 
+  const detailCandidates = shouldLoadHd
+    ? buildCandidates(hdSource, cachedArtSrc, mediumCandidate, baseSrc)
+    : buildCandidates(cachedArtSrc, mediumCandidate, baseSrc)
+  const mediumCandidates = detailCandidates
+  const wideCandidates = shouldLoadHd
+    ? buildCandidates(
+        hdSource,
+        cachedArtSrc,
+        mediumCandidate,
+        wideCandidate,
+        baseSrc
+      )
+    : buildCandidates(cachedArtSrc, mediumCandidate, wideCandidate, baseSrc)
   const tierCandidates: Record<QualityTier, string[]> = {
-    detail: buildCandidates(hd, cachedArtSrc, mediumCandidate, baseSrc),
-    medium: buildCandidates(hd, cachedArtSrc, mediumCandidate, baseSrc),
-    wide: buildCandidates(
-      hd,
-      cachedArtSrc,
-      mediumCandidate,
-      wideCandidate,
-      baseSrc
-    ),
+    detail: detailCandidates,
+    medium: mediumCandidates,
+    wide: wideCandidates,
   }
 
   const selectSrcForTier = (tier: QualityTier) => {
