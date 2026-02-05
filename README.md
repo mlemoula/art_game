@@ -49,6 +49,8 @@ npm run cleanup:image-cache
 
 That script deletes each cached object created for puzzles older than 31 days, clears the `cached_image_url`/`cached_image_generated_at` columns, and removes the matching entry from `src/data/generatedArtImages.json` so the UI can fall back to the canonical Wikimedia downloads.
 
+When it clears a cache row, it now writes the deletion timestamp into `cached_image_generated_at` so that running `generate:image-cache` afterwards doesn’t reprocess the same historical puzzles unless you explicitly reset that column to `NULL`.
+
 ## Growth checklist
 
 1. Build content that attracts searches: add a public “Archive” page listing past puzzles + artist blurbs so Google can index “daily art quiz” style queries and link to the home quiz.

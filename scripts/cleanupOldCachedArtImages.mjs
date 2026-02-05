@@ -83,11 +83,12 @@ const cleanup = async () => {
       )
     }
 
+    const deletionTimestamp = new Date().toISOString()
     const { error: updateError } = await supabase
       .from('daily_art')
       .update({
         cached_image_url: null,
-        cached_image_generated_at: null,
+        cached_image_generated_at: deletionTimestamp,
       })
       .eq('id', record.id)
 
