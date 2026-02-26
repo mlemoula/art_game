@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+import { getTodayDateKey } from '@/lib/dateUtils'
 import { supabase } from '@/lib/supabaseClient'
 
 const parseDates = (value?: string | null) => {
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
     .from('daily_art')
     .select('date')
     .in('date', dates)
+    .lte('date', getTodayDateKey())
 
   if (error) {
     console.error('Archive availability lookup failed', error)

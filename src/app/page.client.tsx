@@ -94,6 +94,10 @@ interface DailyArt {
   wiki_artist_summary_url?: string | null
 }
 
+type HomeProps = {
+  initialDate?: string | null
+}
+
 const DETAIL_SOURCE_THUMB_WIDTH = 1400
 const DETAIL_SOURCE_MEDIUM_WIDTH = 2200
 const ZOOMABLE_IMAGE_WIDTH = 1200
@@ -158,7 +162,7 @@ const cleanArtistIntroParagraphs = (paragraphs: string[]) =>
     )
     .filter((p) => p.length > 0)
 
-export default function Home() {
+export default function Home({ initialDate }: HomeProps) {
   const [art, setArt] = useState<DailyArt | null>(null)
   const [imageReady, setImageReady] = useState(false)
   const [initialAspectRatio, setInitialAspectRatio] = useState<number | null>(null)
@@ -291,7 +295,10 @@ export default function Home() {
         const params = new URLSearchParams()
         const todayKey = extractDayKey(new Date().toISOString())
 
-        if (typeof window !== 'undefined') {
+        if (initialDate) {
+          params.set('date', initialDate)
+          dateParam = initialDate
+        } else if (typeof window !== 'undefined') {
           const currentParams = new URLSearchParams(window.location.search)
           const offset = currentParams.get('offset')
           const date = currentParams.get('date')
@@ -326,7 +333,7 @@ export default function Home() {
     }
     loadArt()
     return () => controller.abort()
-  }, [requestArtFromApi])
+  }, [initialDate, requestArtFromApi])
 
   const artImageUrl = art?.image_url ?? ''
   const generatedArtImageCache = generatedArtImages as Record<string, string>
@@ -988,7 +995,7 @@ export default function Home() {
         (typeof window !== 'undefined'
           ? window.location.origin
           : 'https://whopaintedthis.vercel.app'))
-    const path = art.date ? `/?date=${encodeURIComponent(art.date)}` : '/'
+    const path = art.date ? `/puzzle/${encodeURIComponent(art.date)}` : '/'
     const shareUrl = `${appUrl}${path}`
     const attemptLine = success
       ? 'Puzzle solved.'
@@ -1761,6 +1768,14 @@ export default function Home() {
             <p className="mt-2 text-[11px] answer-meta">
               {art.year} • {museumClue || 'Unknown location'}
             </p>
+            {art.date ? (
+              <Link
+                href={`/puzzle/${encodeURIComponent(art.date)}/solution`}
+                className="mt-3 inline-flex rounded-full border border-gray-300 px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-gray-600 button-hover"
+              >
+                artwork details
+              </Link>
+            ) : null}
           </div>
         </div>
       )}
@@ -1948,7 +1963,7 @@ export default function Home() {
               onClick={() => void router.push('/archive')}
               className="w-full border border-gray-300 text-gray-600 rounded-full px-4 py-2 text-xs tracking-[0.25em] button-hover"
             >
-              Try past puzzles
+              Browse previous artworks
             </button>
             {shareMessage && <p className="text-[10px] text-gray-500">{shareMessage}</p>}
             <div className="pt-3 border-t border-gray-100 space-y-3">

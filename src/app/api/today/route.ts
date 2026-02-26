@@ -1,35 +1,32 @@
 // src/app/api/today/route.ts
 import { supabase } from '@/lib/supabaseClient'
 import { NextRequest, NextResponse } from 'next/server'
-
-const isValidDate = (value: string) => {
-  if (!value) return false
-  const date = new Date(value)
-  return !Number.isNaN(date.getTime())
-}
+import { getTodayDateKey, resolvePlayableDate } from '@/lib/dateUtils'
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url)
   const dateQuery = url.searchParams.get('date')
   const offsetQuery = url.searchParams.get('offset')
 
-  let targetDate = new Date()
+  const todayStr = getTodayDateKey()
+  let targetStr = todayStr
 
   if (offsetQuery) {
     const offset = Number(offsetQuery)
     if (!Number.isNaN(offset)) {
-      const copy = new Date(targetDate)
-      copy.setDate(copy.getDate() + offset)
-      targetDate = copy
+      const copy = new Date(`${todayStr}T00:00:00Z`)
+      copy.setUTCDate(copy.getUTCDate() + offset)
+      targetStr = copy.toISOString().slice(0, 10)
     }
   }
 
-  if (dateQuery && isValidDate(dateQuery)) {
-    targetDate = new Date(dateQuery)
+  if (dateQuery) {
+    const playableDate = resolvePlayableDate(dateQuery)
+    if (!playableDate) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+    targetStr = playableDate
   }
-
-  const todayStr = new Date().toISOString().split('T')[0]
-  const targetStr = targetDate.toISOString().split('T')[0]
 
   if (targetStr > todayStr) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })

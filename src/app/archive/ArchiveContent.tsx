@@ -10,12 +10,9 @@ import { useTheme } from '@/context/theme'
 export type ArchiveArtwork = {
   id: number
   date?: string | null
-  title: string
-  artist: string
+  title?: string | null
   cached_image_url?: string | null
   image_url: string
-  wiki_summary_url?: string | null
-  description?: string | null
 }
 
 const formatDate = (value?: string | null) => {
@@ -52,65 +49,6 @@ type UserScoreMap = Record<number, UserPlaySummary>
 const PROGRESS_KEY_PREFIX = 'art-progress-'
 const MAX_ARCHIVE_ATTEMPTS = 5
 
-function ReadMoreArchive() {
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <div className="space-y-3 text-sm" style={{ color: 'var(--card-foreground)' }}>
-      <button
-        type="button"
-        onClick={() => setExpanded((prev) => !prev)}
-        aria-expanded={expanded}
-        className="flex items-center gap-2 text-xs font-normal uppercase tracking-[0.35em] transition-colors hover:text-current focus-visible:text-current"
-        style={{ color: 'inherit' }}
-      >
-        <span className="text-[10px] leading-none" aria-hidden="true">
-          {expanded ? '▼' : '►'}
-        </span>
-        <span>{expanded ? 'Hide archive details' : 'More about the archive'}</span>
-      </button>
-      {expanded ? (
-        <div className="space-y-6">
-          <article className="space-y-2">
-            <h2 className="text-base font-semibold tracking-tight">
-              Explore past art puzzles
-            </h2>
-            <p className="leading-relaxed">
-              Each archived puzzle features a carefully selected painting from art history, ranging
-              from Renaissance masters to modern and contemporary artists. By revisiting these
-              challenges, you can test your visual memory, sharpen your art knowledge, and discover
-              recurring styles across centuries.
-            </p>
-            <p className="leading-relaxed">
-              The archive allows you to explore previous guesses at your own pace. Every puzzle is
-              presented in the same format as the daily challenge, making it easy to jump back in,
-              compare artists, and learn through play.
-            </p>
-          </article>
-
-          <article className="space-y-2">
-            <h2 className="text-base font-semibold tracking-tight">
-              Why use the archive?
-            </h2>
-            <ul className="space-y-1 leading-relaxed">
-              <li>+ Practice identifying painters by style, color, and composition</li>
-              <li>+ Revisit artworks you may have missed</li>
-              <li>+ Learn about famous painters through an interactive game</li>
-              <li>+ Improve your accuracy for future daily challenges</li>
-            </ul>
-          </article>
-
-          <footer className="text-base leading-relaxed">
-            <p>
-              New puzzles are added regularly as part of the daily <strong>Who Painted This?</strong>{' '}
-              game. You can return to today&rsquo;s challenge at any time, or continue browsing the archive
-              to deepen your understanding of art history through playful exploration.
-            </p>
-          </footer>
-        </div>
-      ) : null}
-    </div>
-  )
-}
 const normalizeSuccessFlag = (value: unknown): boolean => {
   if (typeof value === 'boolean') return value
   if (typeof value === 'number') return value === 1
@@ -371,16 +309,13 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
         >
           <header className="space-y-2">
             <h1 id="archive-title" className="text-2xl font-semibold tracking-tight">
-              Puzzles archive - Guess the Painter
+              Archive - Recent Artworks
             </h1>
             <p className="text-base">
-              Welcome to the <strong>Who Painted This?</strong> archive. This page gathers the{' '}
-              <strong>30 most recent daily art challenges</strong>, where players try to identify the
-              painter behind a famous artwork using visual clues.
+              Replay the <strong>30 latest artworks</strong> and unlock details about each painting and artist
+              once you finish.
             </p>
           </header>
-
-          <ReadMoreArchive />
         </section>
         <div className="grid gap-4 md:grid-cols-2">
           {filteredArtworks.map((art) => {
@@ -395,17 +330,15 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
               effectiveSummary?.history,
               shouldFillWithCrosses ? '×' : '.'
             )
-            const titleText = isComplete ? art.title : ''
-            const artistText = isComplete ? art.artist : ''
+            const solvedTitle = art.title?.trim() || 'Artwork completed'
+            const titleText = isComplete ? solvedTitle : ''
             const imageAlt = isComplete
-              ? `${art.title} — ${art.artist}`
-              : 'Œuvre masquée jusqu’à ce que tu réussisses le puzzle.'
+              ? solvedTitle
+              : 'Artwork hidden until the challenge is completed.'
 
             return (
               <article
                 key={art.id}
-                itemScope
-                itemType="https://schema.org/CreativeWork"
                 className="flex h-full flex-col gap-3 rounded-2xl border p-3 shadow-sm"
                 style={{
                   backgroundColor: 'var(--card-background)',
@@ -413,9 +346,6 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
                   color: 'var(--card-foreground)',
                 }}
               >
-                {art.date ? (
-                  <meta itemProp="datePublished" content={art.date} />
-                ) : null}
                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.35em] card-meta">
                   <span>{formatDate(art.date)}</span>
                   {hasAttempts ? (
@@ -427,32 +357,16 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
                     </span>
                   ) : (
                     <span className="text-[10px] tracking-[0.35em] card-muted">
-                      Not solved yet
+                      Not completed yet
                     </span>
                   )}
                 </div>
                 <div className="space-y-2 min-h-[56px]">
                   {isComplete && (
                     <div className="space-y-1">
-                      <h2
-                        itemProp="name"
-                        className="text-base font-semibold tracking-tight card-foreground"
-                      >
+                      <h2 className="text-base font-semibold tracking-tight card-foreground">
                         {titleText}
                       </h2>
-                      <p
-                        itemScope
-                        itemType="https://schema.org/Person"
-                        itemProp="creator"
-                        className="text-sm card-meta"
-                      >
-                        <span itemProp="name">{artistText}</span>
-                      </p>
-                      {art.description && (
-                        <p className="text-xs card-muted">
-                          {art.description}
-                        </p>
-                      )}
                     </div>
                   )}
                 </div>
@@ -469,27 +383,41 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
                     height={267}
                     priority={false}
                     sizes="(max-width: 768px) 100vw, 50vw"
-                    itemProp="image"
                   />
                   {!isComplete && (
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-slate-900/0 to-slate-950/60" />
                   )}
                 </div>
-                <Link
-                  href={`/?date=${art.date ?? ''}`}
-                  className="mt-auto inline-flex items-center justify-center rounded-full border border-dashed px-3 py-1 text-[10px] uppercase tracking-[0.35em] card-link border-slate-400 dark:border-slate-600"
-                  rel="canonical"
-                  itemProp="url"
-                >
-                  {isComplete ? 'Read more' : 'Replay this puzzle'}
-                </Link>
+                {isComplete ? (
+                  <div className="mt-auto grid grid-cols-2 gap-2">
+                    <Link
+                      href={art.date ? `/puzzle/${encodeURIComponent(art.date)}/solution` : '/archive'}
+                      className="inline-flex items-center justify-center rounded-full border border-dashed px-3 py-1 text-[10px] uppercase tracking-[0.35em] card-link border-slate-400 dark:border-slate-600"
+                    >
+                      Show details
+                    </Link>
+                    <Link
+                      href={art.date ? `/puzzle/${encodeURIComponent(art.date)}` : '/archive'}
+                      className="inline-flex items-center justify-center rounded-full border border-dashed px-3 py-1 text-[10px] uppercase tracking-[0.35em] card-link border-slate-400 dark:border-slate-600"
+                    >
+                      Replay
+                    </Link>
+                  </div>
+                ) : (
+                  <Link
+                    href={art.date ? `/puzzle/${encodeURIComponent(art.date)}` : '/archive'}
+                    className="mt-auto inline-flex items-center justify-center rounded-full border border-dashed px-3 py-1 text-[10px] uppercase tracking-[0.35em] card-link border-slate-400 dark:border-slate-600"
+                  >
+                    Play this artwork
+                  </Link>
+                )}
               </article>
             )
           })}
         </div>
         {filteredArtworks.length === 0 && artworks.length > 0 ? (
           <p className="text-center text-sm card-muted">
-            Retired puzzles no longer appear in this list.
+            Removed artworks no longer appear in this list.
           </p>
         ) : null}
       </div>

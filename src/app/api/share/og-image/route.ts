@@ -2,16 +2,12 @@ import sharp from 'sharp'
 import { NextRequest, NextResponse } from 'next/server'
 
 import { supabase } from '@/lib/supabaseClient'
+import { resolvePlayableDate } from '@/lib/dateUtils'
 
 const CANVAS_WIDTH = 1200
 const CANVAS_HEIGHT = 630
 const DETAIL_RATIO = 0.65
 const CACHE_CONTROL = 'public, max-age=0, s-maxage=31536000, immutable'
-
-const normalizeDateValue = (value?: string) => {
-  if (!value) return ''
-  return value.trim().split('T')[0]
-}
 
 const fetchArtwork = async (date?: string | null) => {
   const today = new Date().toISOString().split('T')[0]
@@ -37,7 +33,11 @@ const fetchArtwork = async (date?: string | null) => {
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url)
-    const dateParam = normalizeDateValue(url.searchParams.get('date') ?? undefined)
+    const requestedDate = url.searchParams.get('date')
+    const dateParam = requestedDate ? resolvePlayableDate(requestedDate) : null
+    if (requestedDate && !dateParam) {
+      return NextResponse.json({ error: 'Artwork not found' }, { status: 404 })
+    }
     const { data, error } = await fetchArtwork(dateParam || undefined)
     if (error) {
       console.error('OG image: unable to fetch artwork', error)
