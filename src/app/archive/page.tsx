@@ -49,6 +49,7 @@ const fetchRecentArt = async (): Promise<ArchiveArtwork[]> => {
 
 export default async function ArchivePage() {
   const artworks = await fetchRecentArt()
+  const today = new Date().toISOString().split('T')[0]
   const structuredData = JSON.stringify({
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
@@ -57,7 +58,7 @@ export default async function ArchivePage() {
     url: `${BASE_URL}/archive`,
     hasPart: artworks
       .map((art, index) => {
-        if (!art.date) return null
+        if (!art.date || art.date >= today) return null
         return {
           '@type': 'ListItem',
           position: index + 1,

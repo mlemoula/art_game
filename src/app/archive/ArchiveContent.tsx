@@ -45,6 +45,7 @@ type UserPlaySummary = {
 }
 
 type UserScoreMap = Record<number, UserPlaySummary>
+type ArchiveFilter = 'all' | 'solved' | 'unsolved'
 
 const PROGRESS_KEY_PREFIX = 'art-progress-'
 const MAX_ARCHIVE_ATTEMPTS = 5
@@ -102,6 +103,7 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
   const [userScores, setUserScores] = useState<UserScoreMap>({})
   const [localScores, setLocalScores] = useState<UserScoreMap>({})
   const [availableDates, setAvailableDates] = useState<Set<string> | null>(null)
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('all')
   const validDates = useMemo(
     () =>
       artworks
@@ -265,6 +267,15 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
     if (!availableDates.size) return []
     return artworks.filter((art) => (art.date ? availableDates.has(art.date) : true))
   }, [artworks, availableDates])
+  const visibleArtworks = useMemo(() => {
+    if (archiveFilter === 'all') return filteredArtworks
+    return filteredArtworks.filter((art) => {
+      const summary = pickPreferredSummary(userScores[art.id], localScores[art.id])
+      const solved = Boolean(summary?.finished)
+      return archiveFilter === 'solved' ? solved : !solved
+    })
+  }, [archiveFilter, filteredArtworks, localScores, userScores])
+  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
   return (
     <div
@@ -317,8 +328,43 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
             </p>
           </header>
         </section>
+        <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.25em]">
+          <button
+            type="button"
+            onClick={() => setArchiveFilter('all')}
+            className="rounded-full border px-3 py-1 card-link"
+            style={{
+              borderColor:
+                archiveFilter === 'all' ? 'var(--card-link)' : 'var(--card-border)',
+            }}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setArchiveFilter('solved')}
+            className="rounded-full border px-3 py-1 card-link"
+            style={{
+              borderColor:
+                archiveFilter === 'solved' ? 'var(--card-link)' : 'var(--card-border)',
+            }}
+          >
+            Completed
+          </button>
+          <button
+            type="button"
+            onClick={() => setArchiveFilter('unsolved')}
+            className="rounded-full border px-3 py-1 card-link"
+            style={{
+              borderColor:
+                archiveFilter === 'unsolved' ? 'var(--card-link)' : 'var(--card-border)',
+            }}
+          >
+            Not solved yet
+          </button>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
-          {filteredArtworks.map((art) => {
+          {visibleArtworks.map((art) => {
             const userSummary = userScores[art.id]
             const localSummary = localScores[art.id]
             const effectiveSummary = pickPreferredSummary(userSummary, localSummary)
@@ -357,7 +403,7 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
                     </span>
                   ) : (
                     <span className="text-[10px] tracking-[0.35em] card-muted">
-                      Not completed yet
+                      Not solved yet
                     </span>
                   )}
                 </div>
@@ -390,12 +436,21 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
                 </div>
                 {isComplete ? (
                   <div className="mt-auto grid grid-cols-2 gap-2">
-                    <Link
-                      href={art.date ? `/puzzle/${encodeURIComponent(art.date)}/solution` : '/archive'}
-                      className="inline-flex items-center justify-center rounded-full border border-dashed px-3 py-1 text-[10px] uppercase tracking-[0.35em] card-link border-slate-400 dark:border-slate-600"
-                    >
-                      Show details
-                    </Link>
+                    {art.date && art.date < todayKey ? (
+                      <Link
+                        href={`/puzzle/${encodeURIComponent(art.date)}/solution`}
+                        className="inline-flex items-center justify-center rounded-full border border-dashed px-3 py-1 text-[10px] uppercase tracking-[0.35em] card-link border-slate-400 dark:border-slate-600"
+                      >
+                        Show details
+                      </Link>
+                    ) : (
+                      <span
+                        className="inline-flex items-center justify-center rounded-full border border-dashed px-3 py-1 text-[10px] uppercase tracking-[0.35em] card-muted border-slate-300 dark:border-slate-700"
+                        aria-hidden="true"
+                      >
+                        Details soon
+                      </span>
+                    )}
                     <Link
                       href={art.date ? `/puzzle/${encodeURIComponent(art.date)}` : '/archive'}
                       className="inline-flex items-center justify-center rounded-full border border-dashed px-3 py-1 text-[10px] uppercase tracking-[0.35em] card-link border-slate-400 dark:border-slate-600"
@@ -415,9 +470,9 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
             )
           })}
         </div>
-        {filteredArtworks.length === 0 && artworks.length > 0 ? (
+        {visibleArtworks.length === 0 && artworks.length > 0 ? (
           <p className="text-center text-sm card-muted">
-            Removed artworks no longer appear in this list.
+            No artworks match this filter right now.
           </p>
         ) : null}
       </div>

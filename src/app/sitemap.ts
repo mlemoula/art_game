@@ -30,7 +30,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const { data, error } = await supabase
     .from('daily_art')
     .select('date')
-    .lte('date', today)
+    .lt('date', today)
     .order('date', { ascending: false })
     .limit(5000)
 

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 
 import { buildSolutionMetadataForDate } from '@/app/metadata'
+import { getTodayDateKey, resolvePlayableDate } from '@/lib/dateUtils'
 import { fetchDailyArtDetailsByDate } from '@/lib/server/dailyArt'
 import { getArtistProfile } from '@/utils/getArtistRecommendations'
 import {
@@ -19,6 +20,14 @@ const BASE_URL = 'https://whopaintedthis.vercel.app'
 
 export async function generateMetadata({ params }: PuzzleSolutionPageProps) {
   const { date } = await params
+  const playableDate = resolvePlayableDate(date)
+  if (!playableDate || playableDate >= getTodayDateKey()) {
+    return {
+      title: 'Artwork details | Who painted this?',
+      description: 'Artwork details are available after the daily puzzle window closes.',
+      robots: { index: false, follow: true },
+    }
+  }
   return buildSolutionMetadataForDate(date)
 }
 
@@ -46,6 +55,10 @@ export default async function PuzzleSolutionPage({
   params,
 }: PuzzleSolutionPageProps) {
   const { date } = await params
+  const playableDate = resolvePlayableDate(date)
+  if (!playableDate || playableDate >= getTodayDateKey()) {
+    notFound()
+  }
   const artwork = await fetchDailyArtDetailsByDate(date)
   if (!artwork) {
     notFound()

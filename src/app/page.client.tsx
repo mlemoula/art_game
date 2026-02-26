@@ -85,13 +85,21 @@ interface DailyArt {
   id: number
   date?: string | null
   image_url: string
-  title: string
-  artist: string
-  year: string
-  museum: string
-  wiki_summary_url: string
+  title?: string | null
+  artist?: string | null
+  year?: string | null
+  museum?: string | null
+  wiki_summary_url?: string | null
   cached_image_url?: string | null
   wiki_artist_summary_url?: string | null
+  artist_initial?: string | null
+  target_profile?: {
+    movement?: string | null
+    country?: string | null
+    birth_year?: number | null
+    death_year?: number | null
+    popularity_score?: number | null
+  } | null
 }
 
 type HomeProps = {
@@ -141,7 +149,6 @@ const FEEDBACK_TONES: Record<FeedbackStatus, string> = {
   missing: 'text-gray-500',
 }
 
-const ASSUMED_MAX_ARTIST_AGE = 85
 const normalizeSuccessFlag = (value: unknown): boolean => {
   if (typeof value === 'boolean') return value
   if (typeof value === 'number') return value === 1
@@ -183,6 +190,7 @@ export default function Home({ initialDate }: HomeProps) {
   const [wikiIntro, setWikiIntro] = useState<string[]>([])
   const [artistWikiIntro, setArtistWikiIntro] = useState<string[]>([])
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([])
   const [highlightedSuggestion, setHighlightedSuggestion] = useState(0)
   const [showHelp, setShowHelp] = useState(false)
   const [guessError, setGuessError] = useState<string | null>(null)
@@ -197,25 +205,21 @@ export default function Home({ initialDate }: HomeProps) {
   const blurTimeoutRef = useRef<number | null>(null)
   const submitLockRef = useRef(false)
   const targetArtist = art?.artist ?? ''
+  const targetProfile = art?.target_profile ?? null
+  const applyRevealedArtwork = useCallback(
+    (revealedArtwork?: Partial<DailyArt> | null) => {
+      if (!revealedArtwork) return
+      setArt((previous) => {
+        if (!previous) return previous
+        return {
+          ...previous,
+          ...revealedArtwork,
+        }
+      })
+    },
+    []
+  )
   const router = useRouter()
-  const artistSuggestions = useMemo(() => {
-    const map = new Map<string, string>()
-    const addName = (name?: string) => {
-      if (!name) return
-      const key = normalizeString(name)
-      if (!map.has(key)) map.set(key, name)
-    }
-    addName(targetArtist)
-    artistHints.forEach((hint) => addName(hint.name))
-    return Array.from(map.values())
-  }, [targetArtist, artistHints])
-  const allowedGuessSet = useMemo(() => {
-    const set = new Set<string>()
-    artistSuggestions.forEach((name) => {
-      if (name) set.add(normalizeString(name))
-    })
-    return set
-  }, [artistSuggestions])
   const artistMeta = useMemo(() => {
     const key = normalizeString(targetArtist || '')
     return artistHints.find(
@@ -246,23 +250,6 @@ export default function Home({ initialDate }: HomeProps) {
     }
     return [sentences.join(' ')]
   }, [art?.artist, artistMeta])
-
-  const suggestionPopularityMap = useMemo(() => {
-    const map = new Map<string, number | null>()
-    const addEntry = (name?: string | null, score?: number | null) => {
-      if (!name) return
-      const key = normalizeString(name)
-      if (!key) return
-      const existing = map.get(key)
-      const normalizedScore = score ?? null
-      if (existing === undefined || normalizedScore !== null) {
-        map.set(key, normalizedScore)
-      }
-    }
-    addEntry(targetArtist, artistMeta?.popularity_score ?? null)
-    artistHints.forEach((hint) => addEntry(hint.name, hint.popularity_score ?? null))
-    return map
-  }, [artistHints, artistMeta, targetArtist])
 
   const requestArtFromApi = useCallback(
     async (params: URLSearchParams, signal?: AbortSignal) => {
@@ -472,6 +459,7 @@ export default function Home({ initialDate }: HomeProps) {
         success?: boolean
         attemptsHistory?: Attempt[]
         playSaved?: boolean
+        revealedArtwork?: Partial<DailyArt>
       }
       setGuess(parsed.currentGuess || '')
       setFinished(Boolean(parsed.finished))
@@ -480,10 +468,13 @@ export default function Home({ initialDate }: HomeProps) {
         Array.isArray(parsed.attemptsHistory) ? parsed.attemptsHistory : []
       )
       setPlaySaved(Boolean(parsed.playSaved))
+      if (parsed.revealedArtwork && typeof parsed.revealedArtwork === 'object') {
+        applyRevealedArtwork(parsed.revealedArtwork)
+      }
     } catch {
       resetCoreState()
     }
-  }, [artId])
+  }, [applyRevealedArtwork, artId])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -528,11 +519,12 @@ export default function Home({ initialDate }: HomeProps) {
       return
     }
     let cancelled = false
+    const artistName = art.artist
     const loadHints = async () => {
       try {
         const [recs, profile] = await Promise.all([
-          getArtistRecommendations(art.artist, 500),
-          getArtistProfile(art.artist),
+          getArtistRecommendations(artistName, 500),
+          getArtistProfile(artistName),
         ])
         if (!cancelled) {
           setArtistHints(
@@ -660,7 +652,8 @@ export default function Home({ initialDate }: HomeProps) {
 
   // Récupération intro Wikipedia (3-4 paragraphes)
   useEffect(() => {
-    if (!art?.wiki_summary_url) {
+    const wikiSummaryUrl = art?.wiki_summary_url
+    if (!wikiSummaryUrl) {
       setWikiIntro([])
       return
     }
@@ -668,7 +661,7 @@ export default function Home({ initialDate }: HomeProps) {
 
     const fetchIntro = async () => {
       try {
-        const summaryUrl = buildWikiApiUrl(art.wiki_summary_url)
+        const summaryUrl = buildWikiApiUrl(wikiSummaryUrl)
         const response = await fetch(summaryUrl, {
           headers: { accept: 'application/json' },
         })
@@ -852,29 +845,40 @@ export default function Home({ initialDate }: HomeProps) {
   const MIN_SUGGESTION_LENGTH = 2
   const MAX_SUGGESTIONS = 25
   const deferredGuess = useDeferredValue(guess)
-  const filteredSuggestions = useMemo(() => {
-    if (deferredGuess.trim().length < MIN_SUGGESTION_LENGTH) return []
-    const needle = normalizeString(deferredGuess.trim())
-    const matches: string[] = []
-    for (const name of artistSuggestions) {
-      if (normalizeString(name).includes(needle)) {
-        matches.push(name)
+  useEffect(() => {
+    const query = deferredGuess.trim()
+    if (query.length < MIN_SUGGESTION_LENGTH) {
+      setSearchSuggestions([])
+      return
+    }
+    let cancelled = false
+    const loadSuggestions = async () => {
+      try {
+        const { data } = await supabase
+          .from('artists')
+          .select('name')
+          .ilike('name', `%${query}%`)
+          .order('popularity_score', { ascending: false })
+          .limit(MAX_SUGGESTIONS)
+        if (cancelled || !data) return
+        const uniqueNames = Array.from(
+          new Set(
+            data
+              .map((entry) => (typeof entry.name === 'string' ? entry.name.trim() : ''))
+              .filter((name): name is string => Boolean(name))
+          )
+        )
+        setSearchSuggestions(uniqueNames)
+      } catch {
+        if (!cancelled) setSearchSuggestions([])
       }
     }
-    matches.sort((a, b) => {
-      const keyA = normalizeString(a)
-      const keyB = normalizeString(b)
-      const popA = suggestionPopularityMap.get(keyA) ?? null
-      const popB = suggestionPopularityMap.get(keyB) ?? null
-      if (popA !== popB) {
-        if (popA === null) return 1
-        if (popB === null) return -1
-        return popB - popA
-      }
-      return a.localeCompare(b, undefined, { sensitivity: 'base' })
-    })
-    return matches.slice(0, MAX_SUGGESTIONS)
-  }, [artistSuggestions, deferredGuess, suggestionPopularityMap])
+    void loadSuggestions()
+    return () => {
+      cancelled = true
+    }
+  }, [deferredGuess])
+  const filteredSuggestions = searchSuggestions
   useEffect(() => {
     setHighlightedSuggestion(0)
   }, [deferredGuess, filteredSuggestions.length])
@@ -1104,6 +1108,19 @@ export default function Home({ initialDate }: HomeProps) {
   useEffect(() => {
     if (!artId || typeof window === 'undefined') return
     const key = `${PROGRESS_KEY_PREFIX}${artId}`
+    const revealedArtwork =
+      finished && art
+        ? {
+            title: art.title ?? null,
+            artist: art.artist ?? null,
+            year: art.year ?? null,
+            museum: art.museum ?? null,
+            wiki_summary_url: art.wiki_summary_url ?? null,
+            wiki_artist_summary_url: art.wiki_artist_summary_url ?? null,
+            artist_initial: art.artist_initial ?? null,
+            target_profile: art.target_profile ?? null,
+          }
+        : null
     const payload = {
       currentGuess: guess,
       finished,
@@ -1111,13 +1128,14 @@ export default function Home({ initialDate }: HomeProps) {
       attemptsHistory,
       playSaved,
       gaveUp,
+      revealedArtwork,
     }
     try {
       window.localStorage.setItem(key, JSON.stringify(payload))
     } catch {
       // ignore storage failures
     }
-  }, [artId, guess, finished, success, attemptsHistory, playSaved, gaveUp])
+  }, [art, artId, guess, finished, success, attemptsHistory, playSaved, gaveUp])
 
   useEffect(() => {
     setAttemptsOpen(false)
@@ -1126,6 +1144,40 @@ export default function Home({ initialDate }: HomeProps) {
   useEffect(() => {
     setGaveUp(false)
   }, [artId])
+
+  useEffect(() => {
+    if (!finished || !art?.date) return
+    if (art.title && art.artist) return
+    let cancelled = false
+    const revealFinishedArtwork = async () => {
+      try {
+        const response = await fetch('/api/puzzle/guess', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: art.date,
+            giveUp: true,
+            attemptsUsed: attemptsHistory.length,
+          }),
+        })
+        const payload = (await response.json().catch(() => null)) as
+          | GuessApiResponse
+          | { error?: string }
+          | null
+        if (cancelled) return
+        if (!response.ok || !payload || typeof payload !== 'object') return
+        if ('revealedArtwork' in payload) {
+          applyRevealedArtwork(payload.revealedArtwork)
+        }
+      } catch {
+        // ignore transient reveal failures
+      }
+    }
+    void revealFinishedArtwork()
+    return () => {
+      cancelled = true
+    }
+  }, [applyRevealedArtwork, art?.artist, art?.date, art?.title, attemptsHistory.length, finished])
 
   const normalize = normalizeString
   const usedGuessSet = useMemo(() => {
@@ -1158,18 +1210,33 @@ export default function Home({ initialDate }: HomeProps) {
     )
   }
 
+  const hasRevealedArtwork = Boolean(art.title?.trim() && art.artist?.trim())
+  const todayKey = extractDayKey(new Date().toISOString())
+  const hasPublishedDetails = Boolean(
+    art.date && extractDayKey(art.date) < todayKey
+  )
+  const revealedTitle = art.title?.trim() || 'Revealing artwork details...'
+  const revealedArtist = art.artist?.trim() || 'Revealing artist...'
   const museumClue =
     art.museum
       ?.split(',')
       .map((chunk) => chunk.trim())
       .filter(Boolean)
-      .pop() || art.museum
-  const fallbackIntro = `${art.title} is a painting by ${art.artist} from ${art.year}, currently exhibited at ${art.museum}.`
+      .pop() || art.museum || 'Unknown location'
+  const fallbackIntro = hasRevealedArtwork
+    ? `${revealedTitle} is a painting by ${revealedArtist}${
+        art.year ? ` from ${art.year}` : ''
+      }, currently exhibited at ${art.museum || 'an unknown location'}.`
+    : 'Artwork details are being prepared...'
   const paintingParagraphs = wikiIntro.length ? wikiIntro : [fallbackIntro]
-  const artistDetailParagraphs = artistWikiIntro.length ? artistWikiIntro : artistParagraphs
+  const artistDetailParagraphs = hasRevealedArtwork
+    ? artistWikiIntro.length
+      ? artistWikiIntro
+      : artistParagraphs
+    : ['Artist details are being prepared...']
   const fallbackArtistWikiUrl = art.artist
     ? `https://en.wikipedia.org/wiki/${encodeURIComponent(
-        art.artist.replace(/\s+/g, '_')
+      art.artist.replace(/\s+/g, '_')
       )}`
     : ''
   const artistWikiHref =
@@ -1179,7 +1246,7 @@ export default function Home({ initialDate }: HomeProps) {
       ? `✦ Title: ${art.title.trim()}`
       : null
   const paintingLocationHint = `✦ This artwork painted in ${art.year ?? 'unknown year'} can be seen in ${museumClue || 'unknown venues'}`
-  const movementHint = `✦ Movement: ${artistMeta?.movement || 'not documented'}`
+  const movementHint = `✦ Movement: ${targetProfile?.movement || 'not documented'}`
   const hintPool = [
     paintingLocationHint,
     movementHint,
@@ -1190,9 +1257,9 @@ export default function Home({ initialDate }: HomeProps) {
     Math.min(attemptsHistory.length, hintPool.length)
   )
   const shouldRevealInitial =
-    attemptsHistory.length >= maxAttempts - 1 && !!art.artist?.trim()
+    attemptsHistory.length >= maxAttempts - 1 && !!art.artist_initial?.trim()
   const initialLetter = shouldRevealInitial
-    ? art.artist.trim().charAt(0).toUpperCase()
+    ? art.artist_initial?.trim().charAt(0).toUpperCase() ?? ''
     : ''
   const initialLetterHint =
     shouldRevealInitial && initialLetter
@@ -1282,17 +1349,21 @@ export default function Home({ initialDate }: HomeProps) {
     )
   }
 
+  type GuessApiResponse = {
+    correct: boolean
+    finished: boolean
+    success: boolean
+    feedback: FeedbackDetail[]
+    revealedArtwork?: Partial<DailyArt> | null
+  }
+
   const handleSubmit = async (overrideGuess?: string) => {
     if (finished || !art) return
     const rawGuess = typeof overrideGuess === 'string' ? overrideGuess : guess
     const trimmedGuess = rawGuess.trim()
     if (!trimmedGuess) return
-    const guessNorm = normalize(trimmedGuess)
     setGaveUp(false)
-    if (!allowedGuessSet.has(guessNorm)) {
-      setGuessError('Pick an artist from the suggestions.')
-      return
-    }
+    const guessNorm = normalize(trimmedGuess)
     if (usedGuessSet.has(guessNorm)) {
       setGuessError('You already tried this artist.')
       return
@@ -1301,138 +1372,42 @@ export default function Home({ initialDate }: HomeProps) {
     submitLockRef.current = true
 
     try {
-      const correctArtist = normalize(art.artist)
-      const artistLastName = normalize(
-        art.artist
-          .split(' ')
-          .filter(Boolean)
-          .pop() || ''
-      )
-      const correct =
-        guessNorm === correctArtist ||
-        (!!artistLastName && guessNorm === artistLastName)
-
-      const feedbackDetails: FeedbackDetail[] = []
-      const artYearNumber = parseInt(art.year, 10)
-      const guessedProfile = await getArtistProfile(trimmedGuess)
-      const localGuessMeta = artistHints.find(
-        (hint) => normalize(hint.name) === guessNorm
-      )
-      const guessedArtistData = guessedProfile || localGuessMeta || null
-
-      const pushDetail = (label: string, value: string, status: FeedbackStatus) =>
-        feedbackDetails.push({ label, value, status })
-
-      if (!correct) {
-        const birth = guessedArtistData?.birth_year
-        const death = guessedArtistData?.death_year
-
-        if (birth) {
-          const aliveDuringPainting =
-            death && artYearNumber >= birth && artYearNumber <= death
-          pushDetail(
-            'Birth year',
-            String(birth),
-            aliveDuringPainting ? 'match' : 'info'
-          )
-        } else {
-          pushDetail('Birth year', '—', 'missing')
-        }
-
-        if (death) {
-          pushDetail(
-            'Death year',
-            String(death),
-            artYearNumber > death ? 'earlier' : 'info'
-          )
-        } else {
-          pushDetail('Death year', '—', 'missing')
-        }
-
-        const artYearValid = Number.isFinite(artYearNumber)
-        if (artYearValid && (birth || death)) {
-          const birthYear = typeof birth === 'number' ? birth : null
-          const fallbackDeath =
-            birthYear !== null
-              ? Math.min(
-                  birthYear + ASSUMED_MAX_ARTIST_AGE,
-                  new Date().getUTCFullYear()
-                )
-              : null
-          const deathYear =
-            typeof death === 'number' ? death : fallbackDeath
-
-          if (birthYear !== null && artYearNumber < birthYear) {
-            pushDetail('Era hint', '🔻 Try an older artist', 'earlier')
-          } else if (deathYear !== null && artYearNumber > deathYear) {
-            pushDetail('Era hint', '🔺 Try a more recent artist', 'later')
-          } else {
-            pushDetail('Era hint', 'Within their lifetime', 'match')
-          }
-        }
-
-        const compareField = (
-          label: string,
-          actual?: string | null,
-          guessField?: string | null
-        ) => {
-          if (!guessField) {
-            pushDetail(label, '—', 'missing')
-            return
-          }
-          if (!actual || !artistMeta) {
-            pushDetail(label, guessField, 'info')
-            return
-          }
-          const match = normalize(actual) === normalize(guessField)
-          pushDetail(label, guessField, match ? 'match' : 'different')
-        }
-
-        compareField('Movement', artistMeta?.movement, guessedArtistData?.movement)
-        compareField('Country', artistMeta?.country, guessedArtistData?.country)
-
-        const guessPopularity = guessedArtistData?.popularity_score ?? null
-        const targetPopularity = artistMeta?.popularity_score ?? null
-        if (guessPopularity !== null && targetPopularity !== null) {
-          const delta = guessPopularity - targetPopularity
-          let popularityHint = ''
-          let tone: FeedbackStatus = 'info'
-          const threshold = 7
-          if (Math.abs(delta) <= threshold) {
-            popularityHint = 'Similar fame'
-            tone = 'match'
-          } else if (delta > threshold) {
-            popularityHint = 'Artist of the day is less famous'
-            tone = 'different'
-          } else {
-            popularityHint = 'Try a more famous artist'
-            tone = 'different'
-          }
-          pushDetail('Fame hint', popularityHint, tone)
-        } else {
-          pushDetail('Fame hint', '—', 'missing')
-        }
-
-        if (!guessedArtistData) {
-          pushDetail('Data', 'No reference yet for this artist.', 'info')
-        }
+      const response = await fetch('/api/puzzle/guess', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: art.date ?? null,
+          guess: trimmedGuess,
+          attemptsUsed: attemptsHistory.length,
+        }),
+      })
+      const payload = (await response.json().catch(() => null)) as
+        | GuessApiResponse
+        | { error?: string }
+        | null
+      if (!response.ok || !payload || typeof payload !== 'object' || !('correct' in payload)) {
+        const message =
+          payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string'
+            ? payload.error
+            : 'Unable to submit guess right now'
+        setGuessError(message)
+        return
       }
 
+      const feedbackDetails = Array.isArray(payload.feedback)
+        ? payload.feedback
+        : []
       setAttemptsHistory((prev) => [
         ...prev,
         {
           guess: trimmedGuess,
-          correct,
+          correct: payload.correct,
           feedback: feedbackDetails,
         },
       ])
-
-      const nextAttemptCount = attemptsCount + 1
-
-      if (correct) {
-        setSuccess(true)
-        setFinished(true)
-      } else if (nextAttemptCount >= maxAttempts) {
+      applyRevealedArtwork(payload.revealedArtwork)
+      if (payload.finished) {
+        setSuccess(Boolean(payload.success))
         setFinished(true)
       }
       setGuess('')
@@ -1443,14 +1418,40 @@ export default function Home({ initialDate }: HomeProps) {
     }
   }
 
-  const handleGiveUp = () => {
+  const handleGiveUp = async () => {
     if (finished || !art) return
-    setFinished(true)
-    setSuccess(false)
-    setGuess('')
-    setSuggestionsOpen(false)
-    setGuessError(null)
-    setGaveUp(true)
+    if (submitLockRef.current) return
+    submitLockRef.current = true
+    try {
+      const response = await fetch('/api/puzzle/guess', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: art.date ?? null,
+          giveUp: true,
+          attemptsUsed: attemptsHistory.length,
+        }),
+      })
+      const payload = (await response.json().catch(() => null)) as
+        | GuessApiResponse
+        | { error?: string }
+        | null
+      if (!response.ok || !payload || typeof payload !== 'object') {
+        setGuessError('Unable to reveal artwork right now')
+        return
+      }
+      if ('revealedArtwork' in payload) {
+        applyRevealedArtwork(payload.revealedArtwork)
+      }
+      setFinished(true)
+      setSuccess(false)
+      setGuess('')
+      setSuggestionsOpen(false)
+      setGuessError(null)
+      setGaveUp(true)
+    } finally {
+      submitLockRef.current = false
+    }
   }
 
   const selectSuggestion = (name: string, submitAfter = false) => {
@@ -1745,7 +1746,11 @@ export default function Home({ initialDate }: HomeProps) {
               fit={showFullImage ? 'contain' : 'cover'}
               lockWidthToImage={finished || showFullImage}
               revealProgress={revealProgress}
-              alt={art ? `${art.title} par ${art.artist}` : 'Artwork du jour'}
+              alt={
+                finished && art?.title && art?.artist
+                  ? `${art.title} by ${art.artist}`
+                  : 'Daily artwork challenge'
+              }
             />
           ) : (
             <div
@@ -1761,14 +1766,14 @@ export default function Home({ initialDate }: HomeProps) {
       {finished && (
         <div className="mt-5 w-[320px] text-center text-xs text-gray-600">
           <div className="w-full max-w-[360px] rounded-2xl p-4 text-center space-y- result-card answer-card">
-            <p className="text-sm tracking-tight answer-title">{art.title}</p>
+            <p className="text-sm tracking-tight answer-title">{revealedTitle}</p>
             <p className="text-sm tracking-tight answer-subtitle">
-              by <span className="answer-artist font-semibold">{art.artist}</span>
+              by <span className="answer-artist font-semibold">{revealedArtist}</span>
             </p>
             <p className="mt-2 text-[11px] answer-meta">
-              {art.year} • {museumClue || 'Unknown location'}
+              {art.year || 'Unknown year'} • {museumClue || 'Unknown location'}
             </p>
-            {art.date ? (
+            {art.date && hasPublishedDetails ? (
               <Link
                 href={`/puzzle/${encodeURIComponent(art.date)}/solution`}
                 className="mt-3 inline-flex rounded-full border border-gray-300 px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-gray-600 button-hover"
@@ -2004,7 +2009,7 @@ export default function Home({ initialDate }: HomeProps) {
                 {artistDetailParagraphs.map((paragraph, idx) => (
                   <p key={`artist-${idx}`} className="text-sm leading-relaxed text-slate-900">
                     {paragraph}
-                    {artistWikiHref ? (
+                    {hasRevealedArtwork && artistWikiHref ? (
                       <>
                         <br />
                         <a
@@ -2013,7 +2018,7 @@ export default function Home({ initialDate }: HomeProps) {
                           rel="noreferrer"
                           className="text-xs text-slate-400 underline decoration-dotted hover:text-slate-600"
                         >
-                          learn more about {art.artist}
+                          learn more about {revealedArtist}
                         </a>
                       </>
                     ) : null}
@@ -2025,7 +2030,7 @@ export default function Home({ initialDate }: HomeProps) {
                 {paintingParagraphs.map((paragraph, idx) => (
                   <p key={`artwork-${idx}`} className="text-sm leading-relaxed text-slate-900">
                     {paragraph}
-                    {art.wiki_summary_url ? (
+                    {hasRevealedArtwork && art.wiki_summary_url ? (
                       <>
                         <br />
                         <a
