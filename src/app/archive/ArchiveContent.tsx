@@ -455,7 +455,7 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
                       href={art.date ? `/puzzle/${encodeURIComponent(art.date)}` : '/archive'}
                       className="inline-flex items-center justify-center rounded-full border border-dashed px-3 py-1 text-[10px] uppercase tracking-[0.35em] card-link border-slate-400 dark:border-slate-600"
                     >
-                      Replay
+                      My results
                     </Link>
                   </div>
                 ) : (
