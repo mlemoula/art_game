@@ -106,7 +106,7 @@ export function buildPuzzleMetadataForDate(date?: string): Metadata {
     title: metadataTitle,
     description: metadataDescription,
     robots: {
-      index: isDailyPuzzlePage ? false : true,
+      index: true,
       follow: true,
     },
     alternates: {
