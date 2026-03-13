@@ -2,12 +2,14 @@ import type { Metadata } from 'next'
 import { supabase } from '@/lib/supabaseClient'
 import { getTodayDateKey, normalizeDayKey, resolvePlayableDate } from '@/lib/dateUtils'
 
-const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://whopaintedthis.vercel.app').replace(/\/+$/, '')
-const HOME_TITLE = 'Who painted this?'
-const HOME_DESCRIPTION = 'This artwork starts zoomed-in. You have 5 tries to guess the painter. Ready?'
+export const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://whopaintedthis.vercel.app').replace(/\/+$/, '')
+export const HOME_TITLE = 'Who painted this?'
+export const HOME_DESCRIPTION =
+  'A daily art quiz: one painting, 5 tries to guess the artist. Test your art history knowledge with works by Vermeer, Monet, Picasso and more.'
 const PUZZLE_DESCRIPTION =
   'Daily art puzzle: zoom out in 5 tries and guess the painter without spoilers.'
-const DEFAULT_LOGO = `${APP_BASE_URL}/file.svg`
+const TWITTER_SITE = '@getlira'
+const OG_IMAGE_TYPE = 'image/png'
 
 export const normalizeDateParam = (value?: string | string[]) =>
   Array.isArray(value) ? value[0].trim() : (value ?? '').trim()
@@ -20,7 +22,7 @@ const buildOgImageUrl = (date?: string) =>
   `${APP_BASE_URL}/api/share/og-image${date ? `?date=${encodeURIComponent(date)}` : ''}`
 
 const DEFAULT_OG_IMAGE = buildOgImageUrl()
-const IMAGE_PLACEHOLDER = { url: DEFAULT_OG_IMAGE, width: 1200, height: 630 }
+const IMAGE_PLACEHOLDER = { url: DEFAULT_OG_IMAGE, width: 1200, height: 630, type: OG_IMAGE_TYPE }
 
 const resolveTargetDate = (value?: string): { targetDate: string; canonicalDate?: string } => {
   const today = getTodayDateKey()
@@ -85,8 +87,8 @@ const BASE_METADATA: Metadata = {
     title: HOME_TITLE,
     description: HOME_DESCRIPTION,
     images: DEFAULT_OG_IMAGE,
+    site: TWITTER_SITE,
   },
-  other: { 'og:logo': DEFAULT_LOGO },
 }
 
 export function buildPuzzleMetadataForDate(date?: string): Metadata {
@@ -117,7 +119,7 @@ export function buildPuzzleMetadataForDate(date?: string): Metadata {
       title: metadataTitle,
       description: metadataDescription,
       url,
-      images: [{ url: image, width: 1200, height: 630 }],
+      images: [{ url: image, width: 1200, height: 630, type: OG_IMAGE_TYPE }],
     },
     twitter: {
       ...BASE_METADATA.twitter,
@@ -173,7 +175,7 @@ export async function buildSolutionMetadataForDate(date?: string): Promise<Metad
       title: shareTitle,
       description: metadataDescription,
       url,
-      images: [{ url: image, width: 1200, height: 630 }],
+      images: [{ url: image, width: 1200, height: 630, type: OG_IMAGE_TYPE }],
     },
     twitter: {
       ...BASE_METADATA.twitter,
