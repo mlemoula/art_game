@@ -1,9 +1,12 @@
 import { supabase } from '@/lib/supabaseClient'
+import { getTodayDateKey } from '@/lib/dateUtils'
 import ArchiveContent, { type ArchiveArtwork } from './ArchiveContent'
 
 const ARCHIVE_DESCRIPTION =
   'Replay up to 30 recent artworks and open detailed artist and painting information after you complete each challenge.'
 const BASE_URL = 'https://whopaintedthis.vercel.app'
+
+export const revalidate = 3600
 
 export const metadata = {
   title: 'Artwork Archive | Who painted this?',
@@ -32,7 +35,7 @@ export const metadata = {
 }
 
 const fetchRecentArt = async (): Promise<ArchiveArtwork[]> => {
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayDateKey()
   const { data, error } = await supabase
     .from('daily_art')
     .select('id, date, title, cached_image_url, image_url')
@@ -49,7 +52,7 @@ const fetchRecentArt = async (): Promise<ArchiveArtwork[]> => {
 
 export default async function ArchivePage() {
   const artworks = await fetchRecentArt()
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayDateKey()
   const structuredData = JSON.stringify({
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',

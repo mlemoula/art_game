@@ -1354,6 +1354,7 @@ export default function Home({ initialDate }: HomeProps) {
     finished: boolean
     success: boolean
     feedback: FeedbackDetail[]
+    canonicalGuess?: string
     revealedArtwork?: Partial<DailyArt> | null
   }
 
@@ -1397,10 +1398,14 @@ export default function Home({ initialDate }: HomeProps) {
       const feedbackDetails = Array.isArray(payload.feedback)
         ? payload.feedback
         : []
+      const canonicalGuess =
+        typeof payload.canonicalGuess === 'string' && payload.canonicalGuess.trim()
+          ? payload.canonicalGuess.trim()
+          : trimmedGuess
       setAttemptsHistory((prev) => [
         ...prev,
         {
-          guess: trimmedGuess,
+          guess: canonicalGuess,
           correct: payload.correct,
           feedback: feedbackDetails,
         },

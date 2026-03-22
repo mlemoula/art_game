@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
@@ -102,16 +102,7 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
   const { theme, toggleTheme, hydrated } = useTheme()
   const [userScores, setUserScores] = useState<UserScoreMap>({})
   const [localScores, setLocalScores] = useState<UserScoreMap>({})
-  const [availableDates, setAvailableDates] = useState<Set<string> | null>(null)
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('all')
-  const validDates = useMemo(
-    () =>
-      artworks
-        .map((art) => art.date)
-        .filter((date): date is string => Boolean(date)),
-    [artworks]
-  )
-  const validDatesKey = validDates.join(',')
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -217,65 +208,13 @@ export default function ArchiveContent({ artworks, structuredData }: ArchiveCont
     }
   }, [artworks])
 
-  useEffect(() => {
-    if (!validDatesKey) {
-      return
-    }
-    const controller = new AbortController()
-    let cancelled = false
-    const queryParams = new URLSearchParams()
-    queryParams.set('dates', validDatesKey)
-    const requestDates = validDatesKey.split(',')
-    const url = `/api/archive/availability?${queryParams.toString()}`
-
-    fetch(url, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(response.statusText || 'Failed to load availability')
-        }
-        return response.json()
-      })
-      .then((payload) => {
-        if (cancelled) return
-        const available = Array.isArray(payload?.availableDates) ? payload.availableDates : []
-        if (available.length) {
-          setAvailableDates(
-            new Set(
-              available.filter(
-                (date: string | null | undefined): date is string => Boolean(date)
-              )
-            )
-          )
-          return
-        }
-        setAvailableDates(new Set())
-      })
-      .catch((error) => {
-        if (cancelled) return
-        console.error('Unable to fetch archive availability', error)
-        setAvailableDates(new Set(requestDates))
-      })
-
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
-  }, [validDatesKey])
-
-  const filteredArtworks = useMemo(() => {
-    if (!availableDates) return artworks
-    if (!availableDates.size) return []
-    return artworks.filter((art) => (art.date ? availableDates.has(art.date) : true))
-  }, [artworks, availableDates])
-  const visibleArtworks = useMemo(() => {
-    if (archiveFilter === 'all') return filteredArtworks
-    return filteredArtworks.filter((art) => {
-      const summary = pickPreferredSummary(userScores[art.id], localScores[art.id])
-      const solved = Boolean(summary?.finished)
-      return archiveFilter === 'solved' ? solved : !solved
-    })
-  }, [archiveFilter, filteredArtworks, localScores, userScores])
-  const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const visibleArtworks = artworks.filter((art) => {
+    if (archiveFilter === 'all') return true
+    const summary = pickPreferredSummary(userScores[art.id], localScores[art.id])
+    const solved = Boolean(summary?.finished)
+    return archiveFilter === 'solved' ? solved : !solved
+  })
+  const todayKey = new Date().toISOString().slice(0, 10)
 
   return (
     <div

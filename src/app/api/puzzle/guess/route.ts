@@ -37,6 +37,49 @@ const parseAttemptsUsed = (value: unknown) => {
   return Math.max(0, Math.floor(value))
 }
 
+const resolveCanonicalArtistName = async (name: string): Promise<string | null> => {
+  if (!name) return null
+
+  const { data: exactRows, error: exactError } = await supabase
+    .from('artists')
+    .select('name')
+    .ilike('name', name)
+    .limit(10)
+
+  if (exactError) {
+    return null
+  }
+
+  const normalizedName = normalizeString(name)
+  const exactMatch = (exactRows ?? []).find(
+    (row) =>
+      typeof row.name === 'string' &&
+      normalizeString(row.name) === normalizedName
+  )
+
+  if (exactMatch?.name) {
+    return exactMatch.name
+  }
+
+  const { data: candidateRows, error: candidateError } = await supabase
+    .from('artists')
+    .select('name')
+    .ilike('name', `%${name}%`)
+    .limit(25)
+
+  if (candidateError) {
+    return null
+  }
+
+  const candidateMatch = (candidateRows ?? []).find(
+    (row) =>
+      typeof row.name === 'string' &&
+      normalizeString(row.name) === normalizedName
+  )
+
+  return candidateMatch?.name ?? null
+}
+
 const fetchArtistProfile = async (name: string): Promise<ArtistProfile | null> => {
   if (!name) return null
   const { data: exact, error: exactError } = await supabase
@@ -236,19 +279,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Guess is required' }, { status: 400 })
   }
 
+  const canonicalGuess = await resolveCanonicalArtistName(guess)
+  if (!canonicalGuess) {
+    return NextResponse.json(
+      { error: 'Choose an artist from the suggestions list.' },
+      { status: 400 }
+    )
+  }
+
   const attemptsUsed = parseAttemptsUsed(body.attemptsUsed)
-  const guessNorm = normalizeString(guess)
+  const guessNorm = normalizeString(canonicalGuess)
   const targetNorm = normalizeString(targetArtist)
   const targetLastName = normalizeString(targetArtist.split(' ').filter(Boolean).pop() || '')
   const correct = guessNorm === targetNorm || (targetLastName && guessNorm === targetLastName)
 
-  const guessedProfile = correct ? targetProfile : await fetchArtistProfile(guess)
+  const guessedProfile = correct ? targetProfile : await fetchArtistProfile(canonicalGuess)
   const feedback = correct
     ? ([] as FeedbackDetail[])
     : buildFeedback({
         guessedProfile,
         targetProfile,
-        guessName: guess,
+        guessName: canonicalGuess,
         artYear: typeof artwork.year === 'string' ? artwork.year : null,
       })
 
@@ -260,6 +311,7 @@ export async function POST(request: NextRequest) {
     finished,
     success: correct,
     feedback,
+    canonicalGuess,
     revealedArtwork: finished ? revealPayload : null,
   })
 }
