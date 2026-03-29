@@ -39,7 +39,32 @@ const PROGRESS_KEY_PREFIX = 'art-progress-'
 const DAY_MS = 24 * 60 * 60 * 1000
 const MOBILE_WIDTH_BREAKPOINT = 768
 const WIKIMEDIA_HEAVY_BYTES_THRESHOLD = 3 * 1024 * 1024
+const MOBILE_CACHED_IMAGE_PROXY_WIDTH = 1600
+const MOBILE_CACHED_IMAGE_PROXY_QUALITY = 78
 type ViewportState = 'unknown' | 'mobile' | 'desktop'
+
+const isRemoteGeneratedArtworkCache = (value: string) => {
+  if (!value) return false
+  try {
+    const url = new URL(value)
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'orrbvrpvawnbmirbyaxu.supabase.co' &&
+      url.pathname.startsWith('/storage/v1/object/public/generated-artworks/')
+    )
+  } catch {
+    return false
+  }
+}
+
+const buildMobileCachedImageProxyUrl = (value: string) => {
+  const params = new URLSearchParams({
+    src: value,
+    w: String(MOBILE_CACHED_IMAGE_PROXY_WIDTH),
+    q: String(MOBILE_CACHED_IMAGE_PROXY_QUALITY),
+  })
+  return `/api/image?${params.toString()}`
+}
 const mergeArtistData = (
   ...lists: Array<ArtistRecommendation[] | undefined>
 ): ArtistRecommendation[] => {
@@ -327,6 +352,10 @@ export default function Home({ initialDate }: HomeProps) {
   const cachedArtSrc =
     art?.cached_image_url ||
     (art ? generatedArtImageCache[art.image_url] ?? '' : '')
+  const mobileSafeCachedArtSrc =
+    viewportState === 'mobile' && isRemoteGeneratedArtworkCache(cachedArtSrc)
+      ? buildMobileCachedImageProxyUrl(cachedArtSrc)
+      : cachedArtSrc
   const isWikimediaImage = useMemo(() => {
     if (!artImageUrl) return false
     try {
@@ -348,7 +377,7 @@ export default function Home({ initialDate }: HomeProps) {
     viewportState === 'mobile' &&
     isWikimediaImage &&
     Boolean(artImageUrl) &&
-    !cachedArtSrc
+    !mobileSafeCachedArtSrc
 
   useEffect(() => {
     if (!shouldMeasureWikimediaSize) {
@@ -406,7 +435,7 @@ export default function Home({ initialDate }: HomeProps) {
   const mediumSource = allowHighResForMobile ? medium : undefined
   const hdSource = allowHighResForMobile ? hd : undefined
   const baseSrc = cachedArtSrc
-    ? cachedArtSrc
+    ? mobileSafeCachedArtSrc
     : shouldFallbackToThumbOnMobile
     ? thumb || mediumSource || hdSource || ''
     : mediumSource ?? thumb ?? hdSource ?? ''
@@ -909,7 +938,9 @@ export default function Home({ initialDate }: HomeProps) {
 
   const isSrcReady = (candidate: string | null | undefined) => {
     if (!candidate) return false
-    if (candidate === cachedArtSrc) return true
+    if (candidate === mobileSafeCachedArtSrc) {
+      return mobileSafeCachedArtSrc === cachedArtSrc ? true : imageReady
+    }
     if (candidate === hdSource) return hdLoaded
     if (candidate === mediumSource) return mediumLoaded
     if (candidate === mediumCandidate) return mediumLoaded
@@ -917,18 +948,18 @@ export default function Home({ initialDate }: HomeProps) {
   }
 
   const detailCandidates = shouldLoadHd
-    ? buildCandidates(hdSource, cachedArtSrc, mediumCandidate, baseSrc)
-    : buildCandidates(cachedArtSrc, mediumCandidate, baseSrc)
+    ? buildCandidates(hdSource, mobileSafeCachedArtSrc, mediumCandidate, baseSrc)
+    : buildCandidates(mobileSafeCachedArtSrc, mediumCandidate, baseSrc)
   const mediumCandidates = detailCandidates
   const wideCandidates = shouldLoadHd
     ? buildCandidates(
         hdSource,
-        cachedArtSrc,
+        mobileSafeCachedArtSrc,
         mediumCandidate,
         wideCandidate,
         baseSrc
       )
-    : buildCandidates(cachedArtSrc, mediumCandidate, wideCandidate, baseSrc)
+    : buildCandidates(mobileSafeCachedArtSrc, mediumCandidate, wideCandidate, baseSrc)
   const tierCandidates: Record<QualityTier, string[]> = {
     detail: detailCandidates,
     medium: mediumCandidates,
