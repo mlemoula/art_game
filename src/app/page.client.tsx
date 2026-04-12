@@ -1547,6 +1547,7 @@ export default function Home({ initialDate }: HomeProps) {
   const frameOuterStyle: CSSProperties | undefined = finished
     ? { maxWidth: 'min(95vw, 1200px)' }
     : undefined
+  const showHeaderHelpButton = viewportState !== 'mobile'
 
   return (
     <main
@@ -1742,17 +1743,21 @@ export default function Home({ initialDate }: HomeProps) {
           color: #cbd5f5;
         }
       `}</style>
-      <div className="w-full max-w-[420px] relative flex items-center justify-center gap-2 mb-6">
-        <h1 className="text-xl font-normal tracking-tight uppercase">Who painted this?</h1>
-        <div className="absolute right-0 flex items-center gap-2">
-          <button
-            type="button"
-            aria-label="How to play"
-            onClick={() => setShowHelp(true)}
-            className="text-xs border border-gray-300 rounded-full px-2 py-1 text-gray-600 button-hover"
-          >
-            ?
-          </button>
+      <div className="w-full max-w-[420px] relative flex items-center justify-center gap-2 mb-6 min-h-8">
+        <h1 className="text-xl font-normal tracking-tight uppercase text-center px-12 sm:px-0">
+          Who painted this?
+        </h1>
+        <div className="absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-2">
+          {showHeaderHelpButton ? (
+            <button
+              type="button"
+              aria-label="How to play"
+              onClick={() => setShowHelp(true)}
+              className="text-xs border border-gray-300 rounded-full px-2 py-1 text-gray-600 button-hover"
+            >
+              ?
+            </button>
+          ) : null}
           {hydrated ? (
             <ThemeToggleButton theme={theme} toggleTheme={toggleTheme} />
           ) : (

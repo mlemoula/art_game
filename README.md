@@ -60,6 +60,44 @@ When it clears a cache row, it now writes the deletion timestamp into `cached_im
 5. Reach out to art/gaming newsletters or forums with a short “why we built Who painted this?” pitch + a media kit (screenshots + sharing copy).
 6. Track search traffic: use Vercel Analytics or Google Search Console to view which keywords/referrers land on `/archive`, note any queries that deliver new visitors, and update the headline/description on the archive + home page accordingly.
 
+## Instagram content kit
+
+You can generate an English-first Instagram package directly from the scheduled puzzle:
+
+```bash
+npm run instagram:kit -- --date 2026-04-12
+```
+
+The script creates `social/instagram/YYYY-MM-DD/` with:
+
+- `post-square.jpg`: ultra-zoomed spoiler-safe square post
+- `carousel-slide-1.jpg` to `carousel-slide-4.jpg`: progressive zoom carousel (`22% → 45% → 72% → 100%`)
+- `story-vertical.jpg`: Story visual with CTA block
+- `reveal-post.jpg`: next-day reveal post with the full artwork + answer overlay
+- `caption.txt`: main caption with clue, artwork wiki snippet and tracked post URL
+- `reveal-caption.txt`: reveal caption with artist snippet, community stats and tracked "today" URL
+- `story-script.txt`: Story sequence with quiz sticker options and CTA
+- `hashtags.txt`: 12 rotating discovery hashtags
+- `reveal-hashtags.txt`: reveal hashtag set
+- `manifest.json`: internal payload with URLs, snippets, metadata and generated asset paths
+
+Tracking is built in:
+
+- feed URL: `utm_source=instagram&utm_medium=post`
+- story URL: `utm_source=instagram&utm_medium=story`
+- reveal CTA URL: `utm_source=instagram&utm_medium=today`
+
+By default it uses `https://whopaintedthis.vercel.app` and the public Supabase keys from `.env.local`.
+
+Useful flags:
+
+```bash
+npm run instagram:kit -- --offset 1
+npm run instagram:kit -- --date 2026-04-12 --brand "Daily Art Guess"
+npm run instagram:kit -- --date 2026-04-12 --output ./tmp/instagram
+npm run instagram:kit -- --date 2026-04-12 --reveal
+```
+
 ## Next ideas
 - Add an admin view listing upcoming artworks.
 - Surface player stats (win rate, streak) in UI.

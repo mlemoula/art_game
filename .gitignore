@@ -42,3 +42,5 @@ next-env.d.ts
 
 *.csv
 public/generated-artworks/
+
+social/
