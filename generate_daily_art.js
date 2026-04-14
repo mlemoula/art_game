@@ -18,7 +18,9 @@ import {
 
 const ARTISTS_CSV = './artists_rows.csv'
 const OUTPUT_CSV = './artworks_generated.csv'
-const TARGET_COUNT = 200
+const PARTIAL_OUTPUT_CSV = './artworks_generated.partial.csv'
+const PROGRESS_JSON = './.generate_daily_art.progress.json'
+const DEFAULT_TARGET_COUNT = 200
 
 // Fame threshold for “very known artists”
 const FAME_THRESHOLD = 92
@@ -39,6 +41,15 @@ const wikidataAPI = (query) =>
 const imageProbeCache = new Map()
 
 const ARTIST_WIKI_SEARCH_DELAY = 150
+const IMAGE_PROBE_DELAY = 180
+const IMAGE_PROBE_MAX_ATTEMPTS = 4
+const IMAGE_PROBE_BASE_BACKOFF_MS = 1200
+const IMAGE_PROBE_RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
+const WIKIDATA_FETCH_DELAY = 200
+const WIKIDATA_FETCH_MAX_ATTEMPTS = 4
+const WIKIDATA_FETCH_BASE_BACKOFF_MS = 1500
+const WIKIDATA_RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
+const PROGRESS_STATE_VERSION = 2
 
 const writeArtistsCsv = (entries, fieldnames) => {
   const csv = stringify(entries, {
@@ -198,6 +209,13 @@ const buildArtworkKey = (payload) => {
   return null
 }
 
+const writeOutputCsv = (rows, filePath = OUTPUT_CSV) => {
+  const csv = stringify(rows, {
+    header: true,
+  })
+  fs.writeFileSync(filePath, csv)
+}
+
 function loadExistingArtworkKeys() {
   if (!fs.existsSync(OUTPUT_CSV)) return new Set()
   try {
@@ -218,22 +236,144 @@ function loadExistingArtworkKeys() {
   }
 }
 
+function loadProgressState() {
+  if (!fs.existsSync(PROGRESS_JSON)) return null
+
+  try {
+    const raw = fs.readFileSync(PROGRESS_JSON, 'utf8')
+    const parsed = JSON.parse(raw)
+    if (parsed?.version !== PROGRESS_STATE_VERSION) return null
+    if (!Array.isArray(parsed.result)) return null
+    if (!Array.isArray(parsed.processedArtists)) return null
+    if (!Array.isArray(parsed.baseExistingArtworkKeys)) return null
+    if (!parsed.runConfig || typeof parsed.runConfig !== 'object') return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function saveProgressState({
+  result,
+  processedArtists,
+  baseExistingArtworkKeys,
+  totalArtists,
+  runConfig,
+}) {
+  const payload = {
+    version: PROGRESS_STATE_VERSION,
+    targetCount: runConfig.targetCount,
+    totalArtists,
+    result,
+    processedArtists: Array.from(processedArtists),
+    baseExistingArtworkKeys: Array.from(baseExistingArtworkKeys),
+    runConfig,
+    updatedAt: new Date().toISOString(),
+  }
+  fs.writeFileSync(PROGRESS_JSON, JSON.stringify(payload, null, 2))
+  writeOutputCsv(result, PARTIAL_OUTPUT_CSV)
+}
+
+function clearProgressState() {
+  if (fs.existsSync(PROGRESS_JSON)) {
+    fs.unlinkSync(PROGRESS_JSON)
+  }
+  if (fs.existsSync(PARTIAL_OUTPUT_CSV)) {
+    fs.unlinkSync(PARTIAL_OUTPUT_CSV)
+  }
+}
+
+function hasFlag(flag) {
+  return process.argv.includes(flag)
+}
+
+function getArgValue(flag) {
+  const index = process.argv.indexOf(flag)
+  if (index === -1) return null
+  const value = process.argv[index + 1]
+  if (!value || value.startsWith('--')) return null
+  return value
+}
+
+function parseTargetCount() {
+  const raw = getArgValue('--count')
+  if (!raw) return DEFAULT_TARGET_COUNT
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`Invalid --count value "${raw}". Expected a positive integer.`)
+  }
+  return parsed
+}
+
+function parseArtistFilter() {
+  const raw = getArgValue('--artist')
+  return raw ? raw.trim() || null : null
+}
+
 // -------------------------------
 // Fetch Artworks for an Artist
 // -------------------------------
 
 async function fetchArtworks(artist) {
   const query = buildWikidataQuery(artist, 15)
+  const endpoint = wikidataAPI(query)
+  let response = null
+  let lastError = null
 
-  await wait(200) // rate limit safe for WDQS
+  for (let attempt = 0; attempt < WIKIDATA_FETCH_MAX_ATTEMPTS; attempt += 1) {
+    await wait(WIKIDATA_FETCH_DELAY)
 
-  const res = await fetch(wikidataAPI(query), {
-    headers: { 'User-Agent': 'Daily-Art-Generator/1.0' },
-  })
+    try {
+      response = await fetch(endpoint, {
+        headers: { 'User-Agent': 'Daily-Art-Generator/1.0' },
+      })
 
-  if (!res.ok) return []
+      if (response.ok) {
+        lastError = null
+        break
+      }
 
-  const json = await res.json()
+      const shouldRetry = WIKIDATA_RETRYABLE_STATUSES.has(response.status)
+      if (!shouldRetry || attempt === WIKIDATA_FETCH_MAX_ATTEMPTS - 1) {
+        return []
+      }
+
+      const retryAfterHeader = response.headers.get('retry-after')
+      const retryAfterSeconds = Number.parseFloat(retryAfterHeader || '')
+      const retryDelay = Number.isFinite(retryAfterSeconds)
+        ? Math.max(0, retryAfterSeconds * 1000)
+        : WIKIDATA_FETCH_BASE_BACKOFF_MS * (attempt + 1)
+
+      console.warn(
+        `   Wikidata rate-limited for ${artist.name} (status ${response.status}), retrying...`
+      )
+      await wait(retryDelay)
+    } catch (error) {
+      lastError = error
+      const code = error?.code || error?.errno || ''
+      const shouldRetry =
+        code === 'ECONNRESET' ||
+        code === 'ETIMEDOUT' ||
+        code === 'ENOTFOUND' ||
+        code === 'EAI_AGAIN'
+
+      if (!shouldRetry || attempt === WIKIDATA_FETCH_MAX_ATTEMPTS - 1) {
+        break
+      }
+
+      console.warn(
+        `   Wikidata request failed for ${artist.name} (${code || 'network error'}), retrying...`
+      )
+      await wait(WIKIDATA_FETCH_BASE_BACKOFF_MS * (attempt + 1))
+    }
+  }
+
+  if (!response?.ok) {
+    if (lastError) throw lastError
+    return []
+  }
+
+  const json = await response.json()
   const rows = json?.results?.bindings ?? []
 
   return rows
@@ -283,25 +423,50 @@ async function imageExists(url) {
   if (!url) return false
   if (imageProbeCache.has(url)) return imageProbeCache.get(url)
 
-  const probe = async (method, extraHeaders = {}) => {
+  await wait(IMAGE_PROBE_DELAY)
+
+  let lastStatus = null
+  let ok = false
+
+  for (let attempt = 0; attempt < IMAGE_PROBE_MAX_ATTEMPTS; attempt += 1) {
     try {
       const response = await fetch(url, {
-        method,
+        method: 'GET',
         headers: {
           'User-Agent': 'Daily-Art-Generator/1.0',
-          ...extraHeaders,
+          Range: 'bytes=0-0',
         },
       })
-      return response.ok
+
+      if (response.ok) {
+        ok = true
+        break
+      }
+
+      lastStatus = response.status
+      const shouldRetry = IMAGE_PROBE_RETRYABLE_STATUSES.has(response.status)
+      if (!shouldRetry || attempt === IMAGE_PROBE_MAX_ATTEMPTS - 1) {
+        break
+      }
+
+      const retryAfterHeader = response.headers.get('retry-after')
+      const retryAfterSeconds = Number.parseFloat(retryAfterHeader || '')
+      const retryDelay = Number.isFinite(retryAfterSeconds)
+        ? Math.max(0, retryAfterSeconds * 1000)
+        : IMAGE_PROBE_BASE_BACKOFF_MS * (attempt + 1)
+
+      await wait(retryDelay)
     } catch {
-      return false
+      lastStatus = null
+      if (attempt === IMAGE_PROBE_MAX_ATTEMPTS - 1) break
+      await wait(IMAGE_PROBE_BASE_BACKOFF_MS * (attempt + 1))
     }
   }
 
-  let ok = await probe('HEAD')
-  if (!ok) {
-    ok = await probe('GET', { Range: 'bytes=0-0' })
+  if (!ok && lastStatus === 429) {
+    console.warn(`   Probe rate-limited for ${url}`)
   }
+
   imageProbeCache.set(url, ok)
   return ok
 }
@@ -310,16 +475,31 @@ async function imageExists(url) {
 // Selection Logic Based on Fame
 // -------------------------------
 
-function pickArtwork(artist, artworks) {
-  if (artworks.length === 0) return null
+function rankArtworksForArtist(artist, artworks) {
+  if (artworks.length === 0) return []
 
-  // 1) lesser-known artists → take top #1 artwork
+  // Lesser-known artists: keep the natural popularity ranking from Wikidata.
   if (artist.fame_index < FAME_THRESHOLD) {
-    return artworks[0]
+    return artworks
   }
 
-  // 2) very famous → pick a mid-popularity artwork (rank 3–5)
-  return artworks[3] || artworks[2] || artworks[0]
+  // Very famous artists: bias toward mid-popularity works first, then fall back.
+  const ranked = []
+  const preferredIndices = [3, 2, 4, 1, 0]
+  const usedIndices = new Set()
+
+  preferredIndices.forEach((index) => {
+    if (!artworks[index]) return
+    ranked.push(artworks[index])
+    usedIndices.add(index)
+  })
+
+  artworks.forEach((artwork, index) => {
+    if (usedIndices.has(index)) return
+    ranked.push(artwork)
+  })
+
+  return ranked
 }
 
 // -------------------------------
@@ -327,31 +507,104 @@ function pickArtwork(artist, artworks) {
 // -------------------------------
 
 async function generate() {
-  const { entries: artists, artistSet } = await loadArtists()
-  const existingArtworkKeys = ENFORCE_EXISTING_DEDUP
-    ? loadExistingArtworkKeys()
-    : new Set()
-  const usedArtworkKeys = new Set(existingArtworkKeys)
+  if (hasFlag('--reset-progress')) {
+    clearProgressState()
+    console.log('Cleared generator progress state.')
+  }
+
+  const targetCount = parseTargetCount()
+  const artistFilter = parseArtistFilter()
+  const runConfig = {
+    targetCount,
+    artistFilter: artistFilter ? normalizeName(artistFilter) : null,
+  }
+
+  const { entries: allArtists, artistSet } = await loadArtists()
+  const artists = artistFilter
+    ? allArtists.filter(
+        (artist) => normalizeName(artist.name) === normalizeName(artistFilter)
+      )
+    : allArtists
+
+  if (artistFilter && !artists.length) {
+    throw new Error(`Artist "${artistFilter}" was not found in the loaded catalog.`)
+  }
+
+  const rawProgressState = loadProgressState()
+  const progressState =
+    rawProgressState &&
+    rawProgressState.runConfig?.targetCount === runConfig.targetCount &&
+    (rawProgressState.runConfig?.artistFilter || null) === runConfig.artistFilter
+      ? rawProgressState
+      : null
+  const baseExistingArtworkKeys =
+    progressState?.baseExistingArtworkKeys?.length
+      ? new Set(progressState.baseExistingArtworkKeys)
+      : ENFORCE_EXISTING_DEDUP
+      ? loadExistingArtworkKeys()
+      : new Set()
+  const processedArtists = new Set(progressState?.processedArtists ?? [])
+  const result = Array.isArray(progressState?.result) ? progressState.result : []
+  const usedArtworkKeys = new Set(baseExistingArtworkKeys)
+  result.forEach((row) => {
+    const key = buildArtworkKey(row)
+    if (key) usedArtworkKeys.add(key)
+  })
+
   console.log(`Loaded ${artists.length} artists from catalog`)
-  if (ENFORCE_EXISTING_DEDUP && existingArtworkKeys.size) {
+  if (artistFilter) {
+    console.log(`Filtering to artist: ${artistFilter}`)
+  }
+  if (progressState) {
     console.log(
-      `Skipping ${existingArtworkKeys.size} artworks already present in ${OUTPUT_CSV}`
+      `Resuming previous run: ${result.length} artworks saved, ${processedArtists.size}/${artists.length} artists already processed`
+    )
+  }
+  if (ENFORCE_EXISTING_DEDUP && baseExistingArtworkKeys.size) {
+    console.log(
+      `Skipping ${baseExistingArtworkKeys.size} artworks already present in ${OUTPUT_CSV}`
     )
   }
 
-  const result = []
   for (const artist of artists) {
-    if (result.length >= TARGET_COUNT) break
+    const artistKey = normalizeName(artist.name)
+    if (processedArtists.has(artistKey)) continue
 
-    console.log(`→ Fetching artworks for ${artist.name}`)
+    console.log(
+      `→ Fetching artworks for ${artist.name} (${processedArtists.size + 1}/${artists.length})`
+    )
     if (!artist.wikidata_id) {
       artist.wikidata_id = await searchWikidataId(artist.name)
       if (!artist.wikidata_id) {
         console.warn(`   No Wikidata ID found for ${artist.name}, skipping.`)
+        processedArtists.add(artistKey)
+        saveProgressState({
+          result,
+          processedArtists,
+          baseExistingArtworkKeys,
+          totalArtists: artists.length,
+          runConfig,
+        })
         continue
       }
     }
-    const artworksRaw = await fetchArtworks(artist)
+    let artworksRaw = []
+    try {
+      artworksRaw = await fetchArtworks(artist)
+    } catch (error) {
+      console.warn(
+        `   Failed to fetch artworks for ${artist.name}: ${error.message || error}`
+      )
+      processedArtists.add(artistKey)
+      saveProgressState({
+        result,
+        processedArtists,
+        baseExistingArtworkKeys,
+        totalArtists: artists.length,
+        runConfig,
+      })
+      continue
+    }
     console.log(`   Found ${artworksRaw.length} raw artworks for ${artist.name}`)
 
     const artworks = artworksRaw
@@ -369,54 +622,96 @@ async function generate() {
 
     console.log(`   ${artworks.length} artworks remain after validation for ${artist.name}`)
 
-    if (!artworks.length) continue
-
-    const chosen = pickArtwork(artist, artworks)
-    if (!chosen) continue
-
-    const exists = await imageExists(chosen.image_url)
-    if (!exists) {
-      console.warn(
-        `   Skipping artwork for ${artist.name}: image unreachable (${chosen.image_url})`
-      )
+    if (!artworks.length) {
+      processedArtists.add(artistKey)
+      saveProgressState({
+        result,
+        processedArtists,
+        baseExistingArtworkKeys,
+        totalArtists: artists.length,
+        runConfig,
+      })
       continue
     }
 
-    const candidate = {
-      image_url: chosen.image_url,
-      title: chosen.title,
-      artist: artist.name,
-      year: chosen.year || '',
-      museum: chosen.museum || '',
-      wiki_summary_url: chosen.wiki_summary_url,
-      wiki_artist_summary_url: artist.wiki_artist_summary_url,
-      meta_json: chosen.meta_json,
+    const rankedArtworks = rankArtworksForArtist(artist, artworks)
+    let scheduledCandidate = null
+
+    for (const chosen of rankedArtworks) {
+      const candidate = {
+        image_url: chosen.image_url,
+        title: chosen.title,
+        artist: artist.name,
+        year: chosen.year || '',
+        museum: chosen.museum || '',
+        wiki_summary_url: chosen.wiki_summary_url,
+        wiki_artist_summary_url: artist.wiki_artist_summary_url,
+        meta_json: chosen.meta_json,
+      }
+
+      const uniquenessKey = buildArtworkKey(candidate)
+      if (ENFORCE_EXISTING_DEDUP && uniquenessKey && usedArtworkKeys.has(uniquenessKey)) {
+        console.warn(
+          `   Skipping artwork for ${artist.name}: already scheduled elsewhere`
+        )
+        continue
+      }
+
+      const exists = await imageExists(chosen.image_url)
+      if (!exists) {
+        console.warn(
+          `   Skipping artwork for ${artist.name}: image unreachable (${chosen.image_url})`
+        )
+        continue
+      }
+
+      if (uniquenessKey) usedArtworkKeys.add(uniquenessKey)
+      scheduledCandidate = candidate
+      break
     }
 
-    const uniquenessKey = buildArtworkKey(candidate)
-    if (ENFORCE_EXISTING_DEDUP && uniquenessKey && usedArtworkKeys.has(uniquenessKey)) {
-      console.warn(
-        `   Skipping artwork for ${artist.name}: already scheduled elsewhere`
-      )
+    if (!scheduledCandidate) {
+      console.warn(`   No schedulable artwork found for ${artist.name}`)
+      processedArtists.add(artistKey)
+      saveProgressState({
+        result,
+        processedArtists,
+        baseExistingArtworkKeys,
+        totalArtists: artists.length,
+        runConfig,
+      })
       continue
     }
-    if (uniquenessKey) usedArtworkKeys.add(uniquenessKey)
 
-    result.push(candidate)
+    result.push(scheduledCandidate)
+    processedArtists.add(artistKey)
+    saveProgressState({
+      result,
+      processedArtists,
+      baseExistingArtworkKeys,
+      totalArtists: artists.length,
+      runConfig,
+    })
   }
 
-  for (let i = result.length - 1; i > 0; i--) {
+  const finalResult = [...result]
+  for (let i = finalResult.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
-    ;[result[i], result[j]] = [result[j], result[i]]
+    ;[finalResult[i], finalResult[j]] = [finalResult[j], finalResult[i]]
   }
 
-  const csv = stringify(result, {
-    header: true,
-  })
+  const trimmedResult = finalResult.slice(0, targetCount)
 
-  fs.writeFileSync(OUTPUT_CSV, csv)
+  if (finalResult.length > targetCount) {
+    console.log(
+      `Collected ${finalResult.length} valid artworks across the catalog, keeping the first ${targetCount} after shuffling`
+    )
+  }
 
-  console.log(`✅ Generated ${result.length} artworks → ${OUTPUT_CSV}`)
+  writeOutputCsv(trimmedResult, OUTPUT_CSV)
+  clearProgressState()
+
+  console.log(`✅ Generated ${trimmedResult.length} artworks → ${OUTPUT_CSV}`)
 }
 
 // -------------------------------

@@ -454,7 +454,7 @@ const buildStoryCopy = ({ clue, puzzleUrl, artist, quizOptions, seed }) => {
     '── STORY SCRIPT ────────────────────────────────',
     '',
     'FRAME 1 — Ultra-zoomed detail (carousel-slide-1.jpg)',
-    '"Can you name this artwork? 🎨"',
+    '"Who painted this? 🎨"',
     '',
     '→ QUIZ STICKER — "Who painted this?"',
     ...allOptions.map(
@@ -495,45 +495,75 @@ const buildStoryCopy = ({ clue, puzzleUrl, artist, quizOptions, seed }) => {
 // ─── SVG overlays ─────────────────────────────────────────────────────────────
 
 /**
- * Minimal overlay for carousel slides.
- * slideIndex 0 = tightest (question), slideIndex 3 = full (CTA).
+ * Overlay for carousel slides.
+ *
+ * Slide rhythm (4 slides):
+ *   0 = question only — pure mystery, no clue
+ *   1 = silent — image expands, no text (swipe curiosity)
+ *   2 = clue pill appears for the first time
+ *   3 = full painting + CTA (positioned low, painting breathes above)
+ *
+ * For N > 4 slides, clue appears from slide 2 to N-2 inclusive.
  */
 const createCarouselOverlay = ({ brandName, slideIndex, totalSlides, clueShort, date }) => {
   const slideLabel = `${slideIndex + 1} / ${totalSlides}`
   const isFirst = slideIndex === 0
   const isLast = slideIndex === totalSlides - 1
+  const isSilent = slideIndex === 1  // image expands, no overlay text
+  const showClue = !isFirst && !isLast && !isSilent
 
-  // Bottom content varies per slide
-  let bottomContent
+  let bottomContent = ''
+
   if (isFirst) {
+    // Question only — large serif, bottom-left
     bottomContent = `
-      <text x="88" y="808" font-size="82" font-family="Georgia, serif" fill="#ffffff">Can you</text>
-      <text x="88" y="892" font-size="82" font-family="Georgia, serif" fill="#ffffff">name this</text>
-      <text x="88" y="976" font-size="82" font-family="Georgia, serif" fill="#ffffff">artwork?</text>
+      <text x="88" y="808" font-size="88" font-family="Georgia, serif" fill="#ffffff">Who</text>
+      <text x="88" y="892" font-size="88" font-family="Georgia, serif" fill="#ffffff">painted</text>
+      <text x="88" y="976" font-size="88" font-family="Georgia, serif" fill="#ffffff">this?</text>
     `
-  } else if (isLast) {
+  } else if (isSilent) {
+    // No bottom content — the expanding image speaks for itself.
+    // A hairline swipe hint at the very bottom keeps the eye moving.
     bottomContent = `
-      <rect x="80" y="740" rx="44" ry="44" width="920" height="164" fill="#f2e8d7" />
-      <text x="540" y="814" font-size="34" font-family="Arial, sans-serif" letter-spacing="4" fill="#1d1c1a" text-anchor="middle">LINK IN BIO</text>
-      <text x="540" y="862" font-size="28" font-family="Arial, sans-serif" fill="#51483d" text-anchor="middle">Play today's puzzle</text>
-      <text x="540" y="960" font-size="30" font-family="Georgia, serif" fill="#ffffff" text-anchor="middle">Full painting revealed</text>
+      <text x="540" y="1020" font-size="22" font-family="Arial, sans-serif" letter-spacing="4" fill="rgba(255,247,232,0.28)" text-anchor="middle">KEEP SWIPING →</text>
     `
-  } else {
+  } else if (showClue) {
     const clueLines = wrapText(clueShort, 28)
     bottomContent = `
       <rect x="88" y="748" rx="26" ry="26" width="500" height="${40 + clueLines.length * 52}" fill="rgba(20,20,24,0.62)" stroke="rgba(255,247,232,0.22)" />
       <text x="118" y="786" font-size="22" font-family="Arial, sans-serif" letter-spacing="3" fill="#d4c6af">TODAY'S CLUE</text>
       ${clueLines.map((l, i) => `<text x="108" y="${828 + i * 52}" font-size="40" font-family="Georgia, serif" fill="#fff7e8">${escapeXml(l)}</text>`).join('')}
     `
+  } else if (isLast) {
+    // CTA anchored to the bottom — painting shows freely above it.
+    // Stronger gradient ensures legibility without cutting the composition.
+    bottomContent = `
+      <rect x="80" y="860" rx="44" ry="44" width="920" height="152" fill="#f2e8d7" />
+      <text x="540" y="930" font-size="34" font-family="Arial, sans-serif" letter-spacing="4" fill="#1d1c1a" text-anchor="middle">LINK IN BIO</text>
+      <text x="540" y="974" font-size="26" font-family="Arial, sans-serif" fill="#51483d" text-anchor="middle">Play today's puzzle</text>
+    `
   }
+
+  // Last slide gets a heavier bottom gradient so the painting shows clearly
+  // above the CTA without the dark band eating into the composition.
+  const gradientStops = isLast
+    ? `
+      <stop offset="0%" stop-color="rgba(16,16,19,0.10)" />
+      <stop offset="52%" stop-color="rgba(16,16,19,0.0)" />
+      <stop offset="78%" stop-color="rgba(16,16,19,0.55)" />
+      <stop offset="100%" stop-color="rgba(16,16,19,0.90)" />
+    `
+    : `
+      <stop offset="0%" stop-color="rgba(16,16,19,0.22)" />
+      <stop offset="48%" stop-color="rgba(16,16,19,0.0)" />
+      <stop offset="100%" stop-color="rgba(16,16,19,0.88)" />
+    `
 
   return Buffer.from(`
     <svg width="${POST_SIZE}" height="${POST_SIZE}" viewBox="0 0 ${POST_SIZE} ${POST_SIZE}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="rgba(16,16,19,0.22)" />
-          <stop offset="48%" stop-color="rgba(16,16,19,0.0)" />
-          <stop offset="100%" stop-color="rgba(16,16,19,0.88)" />
+          ${gradientStops}
         </linearGradient>
       </defs>
       <rect width="100%" height="100%" fill="url(#fade)" />
@@ -567,9 +597,9 @@ const createSquareOverlay = ({ brandName, clueShort, date }) => {
       </defs>
       <rect width="100%" height="100%" fill="url(#fade)" />
       <text x="88" y="96" font-size="28" font-family="Arial, sans-serif" letter-spacing="6" fill="#fff7e8">${escapeXml(brandName.toUpperCase())}</text>
-      <text x="88" y="168" font-size="82" font-family="Georgia, serif" fill="#ffffff">Can you</text>
-      <text x="88" y="252" font-size="82" font-family="Georgia, serif" fill="#ffffff">name this</text>
-      <text x="88" y="336" font-size="82" font-family="Georgia, serif" fill="#ffffff">artwork?</text>
+      <text x="88" y="168" font-size="88" font-family="Georgia, serif" fill="#ffffff">Who</text>
+      <text x="88" y="252" font-size="88" font-family="Georgia, serif" fill="#ffffff">painted</text>
+      <text x="88" y="336" font-size="88" font-family="Georgia, serif" fill="#ffffff">this?</text>
       <rect x="88" y="680" rx="26" ry="26" width="460" height="${40 + clueLines.length * 52}" fill="rgba(20,20,24,0.58)" stroke="rgba(255,247,232,0.25)" />
       <text x="118" y="718" font-size="22" font-family="Arial, sans-serif" letter-spacing="3" fill="#d4c6af">TODAY'S CLUE</text>
       ${clueSvg}
@@ -580,6 +610,7 @@ const createSquareOverlay = ({ brandName, clueShort, date }) => {
 
 /**
  * Overlay for the story (9:16).
+ * Single-line headline keeps the top compact so the artwork card dominates.
  */
 const createStoryOverlay = ({ brandName, clueText, date }) => {
   const clueLines = wrapText(clueText, 28)
@@ -593,15 +624,15 @@ const createStoryOverlay = ({ brandName, clueText, date }) => {
     <svg width="${STORY_WIDTH}" height="${STORY_HEIGHT}" viewBox="0 0 ${STORY_WIDTH} ${STORY_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="rgba(15,15,18,0.22)" />
-          <stop offset="100%" stop-color="rgba(15,15,18,0.78)" />
+          <stop offset="0%" stop-color="rgba(15,15,18,0.30)" />
+          <stop offset="28%" stop-color="rgba(15,15,18,0.10)" />
+          <stop offset="72%" stop-color="rgba(15,15,18,0.08)" />
+          <stop offset="100%" stop-color="rgba(15,15,18,0.82)" />
         </linearGradient>
       </defs>
       <rect width="100%" height="100%" fill="url(#bg)" />
-      <text x="96" y="124" font-size="32" font-family="Arial, sans-serif" letter-spacing="6" fill="#fff7e8">${escapeXml(brandName.toUpperCase())}</text>
-      <text x="96" y="218" font-size="88" font-family="Georgia, serif" fill="#ffffff">Can you</text>
-      <text x="96" y="310" font-size="88" font-family="Georgia, serif" fill="#ffffff">name this</text>
-      <text x="96" y="402" font-size="88" font-family="Georgia, serif" fill="#ffffff">artwork?</text>
+      <text x="96" y="116" font-size="28" font-family="Arial, sans-serif" letter-spacing="6" fill="#fff7e8">${escapeXml(brandName.toUpperCase())}</text>
+      <text x="96" y="186" font-size="64" font-family="Georgia, serif" fill="#ffffff">Who painted this?</text>
       <rect x="80" y="1210" rx="30" ry="30" width="920" height="${98 + clueLines.length * 54}" fill="rgba(20,20,24,0.66)" stroke="rgba(255,247,232,0.22)" />
       <text x="116" y="1270" font-size="24" font-family="Arial, sans-serif" letter-spacing="4" fill="#d4c6af">TODAY'S CLUE</text>
       ${clueSvg}
@@ -619,7 +650,7 @@ const createStoryOverlay = ({ brandName, clueText, date }) => {
  */
 const createRevealOverlay = ({ brandName, artist, title, year, museum, date }) => {
   const artistLines = wrapText(artist, 24)
-  const titleLines = wrapText(title || 'Untitled', 30)
+  const titleLines = wrapText(title || 'Untitled', 38)
   const museumCity = museum ? museum.split(',').map((s) => s.trim()).pop() : null
   const metaLine = [year, museumCity].filter(Boolean).join(' · ')
   const cardTop = 690
