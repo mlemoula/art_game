@@ -10,7 +10,6 @@ type PuzzlePayload = {
   cached_image_url: string | null
   year: string | null
   museum: string | null
-  artist_initial: string | null
   target_profile: {
     movement: string | null
     country: string | null
@@ -64,8 +63,6 @@ export async function GET(request: NextRequest) {
   }
 
   const artistName = typeof data.artist === 'string' ? data.artist.trim() : ''
-  const artistInitial = artistName ? artistName.charAt(0).toUpperCase() : null
-
   let targetProfile: PuzzlePayload['target_profile'] = null
   if (artistName) {
     const { data: artistData } = await supabase
@@ -95,7 +92,6 @@ export async function GET(request: NextRequest) {
       typeof data.cached_image_url === 'string' ? data.cached_image_url : null,
     year: typeof data.year === 'string' ? data.year : null,
     museum: typeof data.museum === 'string' ? data.museum : null,
-    artist_initial: artistInitial,
     target_profile: targetProfile,
   }
 

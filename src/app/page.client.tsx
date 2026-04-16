@@ -117,7 +117,6 @@ interface DailyArt {
   wiki_summary_url?: string | null
   cached_image_url?: string | null
   wiki_artist_summary_url?: string | null
-  artist_initial?: string | null
   target_profile?: {
     movement?: string | null
     country?: string | null
@@ -174,6 +173,11 @@ const FEEDBACK_TONES: Record<FeedbackStatus, string> = {
   missing: 'text-gray-500',
 }
 
+const getAttemptGlyph = (attempt?: { correct: boolean } | null) => {
+  if (!attempt) return '.'
+  return attempt.correct ? '✅' : '×'
+}
+
 const normalizeSuccessFlag = (value: unknown): boolean => {
   if (typeof value === 'boolean') return value
   if (typeof value === 'number') return value === 1
@@ -207,6 +211,7 @@ export default function Home({ initialDate }: HomeProps) {
   const [attemptsHistory, setAttemptsHistory] = useState<Attempt[]>([])
   const [artistHints, setArtistHints] =
     useState<ArtistRecommendation[]>(FALLBACK_ARTISTS)
+  const [finalAttemptOptions, setFinalAttemptOptions] = useState<string[]>([])
   const [userToken, setUserToken] = useState('')
   const [playSaved, setPlaySaved] = useState(false)
   const [playStats, setPlayStats] = useState<UserStats | null>(null)
@@ -445,6 +450,7 @@ export default function Home({ initialDate }: HomeProps) {
   const shouldLoadHd =
     viewportState !== 'unknown' && Boolean(hdSource) && canLoadHdOnMobile
   const attemptsCount = attemptsHistory.length
+  const isFinalAttempt = !finished && attemptsCount === maxAttempts - 1
   const revealProgress = Math.min(
     1,
     (attemptsCount + (finished ? 1 : 0)) / maxAttempts
@@ -456,6 +462,7 @@ export default function Home({ initialDate }: HomeProps) {
   useEffect(() => {
     if (!artId) return
     setArtistHints(FALLBACK_ARTISTS)
+    setFinalAttemptOptions([])
     setMediumLoaded(false)
     setShareMessage('')
     setSuggestionsOpen(false)
@@ -565,10 +572,12 @@ export default function Home({ initialDate }: HomeProps) {
           )
         }
       } catch {
-        if (!cancelled) setArtistHints(FALLBACK_ARTISTS)
+        if (!cancelled) {
+          setArtistHints(FALLBACK_ARTISTS)
+        }
       }
     }
-    loadHints()
+    void loadHints()
     return () => {
       cancelled = true
     }
@@ -1014,8 +1023,7 @@ export default function Home({ initialDate }: HomeProps) {
   const shareGlyphs = useMemo(() => {
     const tokens = Array.from({ length: maxAttempts }, (_, idx) => {
       const attempt = attemptsHistory[idx]
-      if (!attempt) return '.'
-      return attempt.correct ? '✅' : '×'
+      return getAttemptGlyph(attempt)
     })
     if (gaveUp && finished && !success) {
       return tokens.map((token) => (token === '.' ? '×' : token)).join(' ')
@@ -1148,7 +1156,6 @@ export default function Home({ initialDate }: HomeProps) {
             museum: art.museum ?? null,
             wiki_summary_url: art.wiki_summary_url ?? null,
             wiki_artist_summary_url: art.wiki_artist_summary_url ?? null,
-            artist_initial: art.artist_initial ?? null,
             target_profile: art.target_profile ?? null,
           }
         : null
@@ -1218,6 +1225,59 @@ export default function Home({ initialDate }: HomeProps) {
     })
     return set
   }, [attemptsHistory, normalize])
+  useEffect(() => {
+    if (!isFinalAttempt || !art?.date) {
+      setFinalAttemptOptions([])
+      return
+    }
+
+    let cancelled = false
+    const loadFinalAttemptOptions = async () => {
+      try {
+        const response = await fetch('/api/puzzle/final-options', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: art.date,
+            usedGuesses: attemptsHistory.map((attempt) => attempt.guess),
+          }),
+        })
+
+        const payload = (await response.json().catch(() => null)) as
+          | { options?: unknown }
+          | { error?: string }
+          | null
+
+        if (cancelled) return
+        if (
+          response.ok &&
+          payload &&
+          typeof payload === 'object' &&
+          Array.isArray(payload.options)
+        ) {
+          const options = payload.options.filter(
+            (value): value is string => typeof value === 'string' && Boolean(value.trim())
+          )
+          setFinalAttemptOptions(options)
+          return
+        }
+        setFinalAttemptOptions([])
+      } catch {
+        if (!cancelled) setFinalAttemptOptions([])
+      }
+    }
+
+    void loadFinalAttemptOptions()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    art?.date,
+    attemptsHistory,
+    isFinalAttempt,
+  ])
+  const showFinalAttemptPicker = isFinalAttempt && finalAttemptOptions.length === 4
 
   if (!art && fetchError) {
     return (
@@ -1287,16 +1347,7 @@ export default function Home({ initialDate }: HomeProps) {
     0,
     Math.min(attemptsHistory.length, hintPool.length)
   )
-  const shouldRevealInitial =
-    attemptsHistory.length >= maxAttempts - 1 && !!art.artist_initial?.trim()
-  const initialLetter = shouldRevealInitial
-    ? art.artist_initial?.trim().charAt(0).toUpperCase() ?? ''
-    : ''
-  const initialLetterHint =
-    shouldRevealInitial && initialLetter
-      ? `✦ First name starts with: ${initialLetter}`
-      : null
-  const visibleClues = [...hintsToShow, initialLetterHint].filter(
+  const visibleClues = [...hintsToShow].filter(
     (hint): hint is string => Boolean(hint)
   )
   const hasClues = visibleClues.length > 0
@@ -1828,110 +1879,141 @@ export default function Home({ initialDate }: HomeProps) {
 
       {!finished && (
         <div className="flex flex-col items-center mt-6 space-y-3 w-full max-w-[360px]">
-          <label htmlFor="guess-input" className="sr-only">
-            Guess the painter
-          </label>
-          <div className="relative w-full">
-            <input
-              id="guess-input"
-              ref={inputRef}
-              name="guess"
-              type="text"
-              autoComplete="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              inputMode="text"
-              value={guess}
-              onFocus={handleInputFocus}
-              onBlur={handleInputBlur}
-              onChange={(e) => {
-                setGuess(e.target.value)
-                setSuggestionsOpen(true)
-                if (guessError) setGuessError(null)
-              }}
-              onKeyDown={(e) => {
-                if (showSuggestions && filteredSuggestions.length) {
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault()
-                    setHighlightedSuggestion((prev) =>
-                      prev + 1 >= filteredSuggestions.length ? 0 : prev + 1
-                    )
-                    return
-                  }
-                  if (e.key === 'ArrowUp') {
-                    e.preventDefault()
-                    setHighlightedSuggestion((prev) =>
-                      prev - 1 < 0
-                        ? filteredSuggestions.length - 1
-                        : prev - 1
-                    )
-                    return
-                  }
-                  if (e.key === 'Tab') {
-                    setSuggestionsOpen(false)
-                    return
-                  }
-                  if (e.key === 'Escape') {
-                    e.preventDefault()
-                    setSuggestionsOpen(false)
-                    return
-                  }
-                }
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  if (showSuggestions && filteredSuggestions.length) {
-                    const choice =
-                      filteredSuggestions[highlightedSuggestion] ||
-                      filteredSuggestions[0]
-                    selectSuggestion(choice, true)
-                    return
-                  }
+          {!isFinalAttempt && (
+            <>
+              <label htmlFor="guess-input" className="sr-only">
+                Guess the painter
+              </label>
+              <div className="relative w-full">
+                <input
+                  id="guess-input"
+                  ref={inputRef}
+                  name="guess"
+                  type="text"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  inputMode="text"
+                  value={guess}
+                  onFocus={handleInputFocus}
+                  onBlur={handleInputBlur}
+                  onChange={(e) => {
+                    setGuess(e.target.value)
+                    setSuggestionsOpen(true)
+                    if (guessError) setGuessError(null)
+                  }}
+                  onKeyDown={(e) => {
+                    if (showSuggestions && filteredSuggestions.length) {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault()
+                        setHighlightedSuggestion((prev) =>
+                          prev + 1 >= filteredSuggestions.length ? 0 : prev + 1
+                        )
+                        return
+                      }
+                      if (e.key === 'ArrowUp') {
+                        e.preventDefault()
+                        setHighlightedSuggestion((prev) =>
+                          prev - 1 < 0
+                            ? filteredSuggestions.length - 1
+                            : prev - 1
+                        )
+                        return
+                      }
+                      if (e.key === 'Tab') {
+                        setSuggestionsOpen(false)
+                        return
+                      }
+                      if (e.key === 'Escape') {
+                        e.preventDefault()
+                        setSuggestionsOpen(false)
+                        return
+                      }
+                    }
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      if (showSuggestions && filteredSuggestions.length) {
+                        const choice =
+                          filteredSuggestions[highlightedSuggestion] ||
+                          filteredSuggestions[0]
+                        selectSuggestion(choice, true)
+                        return
+                      }
+                      void handleSubmit()
+                    }
+                  }}
+                  placeholder={placeholderText}
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-base tracking-tight bg-white"
+                  style={{ fontSize: '16px' }}
+                />
+                {showSuggestions && (
+                  <ul className="absolute left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto border border-gray-200 rounded-xl bg-white shadow-lg z-10">
+                    {filteredSuggestions.map((name, idx) => {
+                      const active = idx === highlightedSuggestion
+                      return (
+                        <li
+                          key={name}
+                          className={`px-3 py-2 text-xs cursor-pointer ${
+                            active
+                              ? 'bg-gray-900 text-white'
+                              : 'bg-white text-gray-800'
+                          } ${idx !== filteredSuggestions.length - 1 ? 'border-b border-gray-100' : ''}`}
+                          onMouseEnter={() => setHighlightedSuggestion(idx)}
+                          onMouseDown={(event) => {
+                            event.preventDefault()
+                            clearPendingBlur()
+                            selectSuggestion(name)
+                          }}
+                        >
+                          {name}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+              {guessError && (
+                <p className="w-full text-left text-xs text-rose-600">{guessError}</p>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setSuggestionsOpen(false)
                   void handleSubmit()
-                }
-              }}
-              placeholder={placeholderText}
-              className="w-full border border-gray-300 rounded px-3 py-2 text-base tracking-tight bg-white"
-              style={{ fontSize: '16px' }}
-            />
-            {showSuggestions && (
-              <ul className="absolute left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto border border-gray-200 rounded-xl bg-white shadow-lg z-10">
-                {filteredSuggestions.map((name, idx) => {
-                  const active = idx === highlightedSuggestion
-                  return (
-                    <li
-                      key={name}
-                      className={`px-3 py-2 text-xs cursor-pointer ${
-                        active
-                          ? 'bg-gray-900 text-white'
-                          : 'bg-white text-gray-800'
-                      } ${idx !== filteredSuggestions.length - 1 ? 'border-b border-gray-100' : ''}`}
-                      onMouseEnter={() => setHighlightedSuggestion(idx)}
-                      onMouseDown={(event) => {
-                        event.preventDefault()
-                        clearPendingBlur()
-                        selectSuggestion(name)
-                      }}
-                    >
-                      {name}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </div>
-          {guessError && (
-            <p className="w-full text-left text-xs text-rose-600">{guessError}</p>
+                }}
+                className="w-full border border-gray-900 text-gray-900 rounded px-3 py-2 text-sm tracking-tight button-hover"
+              >
+                Submit
+              </button>
+            </>
           )}
-          <button
-            type="button"
-            onClick={() => {
-              setSuggestionsOpen(false)
-              void handleSubmit()
-            }}
-            className="w-full border border-gray-900 text-gray-900 rounded px-3 py-2 text-sm tracking-tight button-hover"
-          >
-            Submit
-          </button>
+          {isFinalAttempt && !showFinalAttemptPicker && (
+            <p className="w-full text-center text-xs text-gray-500">
+              Preparing your final 4 options…
+            </p>
+          )}
+          {showFinalAttemptPicker && (
+            <div className="w-full space-y-2">
+              <p className="text-[11px] text-center text-gray-500 uppercase tracking-[0.2em]">
+                One last guess
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {finalAttemptOptions.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      setSuggestionsOpen(false)
+                      void handleSubmit(option)
+                    }}
+                    className="rounded border border-gray-300 px-3 py-2 text-xs text-gray-800 button-hover"
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {hasClues && (
             <div className="text-[11px] text-gray-500 space-y-1">
               <p>
@@ -2101,7 +2183,8 @@ export default function Home({ initialDate }: HomeProps) {
 			<ul className="text-xs text-gray-600 space-y-1 list-disc list-inside">
 			  <li>Start by looking at a tight detail of the painting.</li>
 			  <li>Type the name of the artist you think painted it.</li>
-				  <li>Each wrong guess unlocks the next hint in this order: venue, era, art movement, nationality, and, on your final guess, the artist&apos;s first letter.</li>
+				  <li>Each wrong guess reveals more of the artwork and a little more context.</li>
+              <li>On your final try, you&apos;ll get four artists to choose from.</li>
 			  <li>The image de-zooms until the full painting is fully revealed.</li>
 			</ul>
             <div className="flex justify-end">

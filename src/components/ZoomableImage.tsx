@@ -1,9 +1,9 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type SyntheticEvent } from 'react'
 import NextImage from 'next/image'
 import { motion } from 'framer-motion'
 
-const MotionImage = motion(NextImage)
+const MotionImage = motion.create(NextImage)
 
 interface Props {
   src: string
@@ -132,12 +132,10 @@ export default function ZoomableImage({
     }
   }, [src, renderedSrc])
 
-  const handleLoadingComplete = (result: {
-    naturalWidth?: number
-    naturalHeight?: number
-  }) => {
-    if (result.naturalWidth && result.naturalHeight) {
-      setNaturalRatio(result.naturalWidth / result.naturalHeight)
+  const handleLoad = (event: SyntheticEvent<HTMLImageElement>) => {
+    const image = event.currentTarget
+    if (image.naturalWidth && image.naturalHeight) {
+      setNaturalRatio(image.naturalWidth / image.naturalHeight)
     }
   }
 
@@ -205,9 +203,9 @@ export default function ZoomableImage({
         height={height}
         priority
         fetchPriority="high"
-        quality={85}
+        quality={75}
         draggable={false}
-        onLoadingComplete={handleLoadingComplete}
+        onLoad={handleLoad}
         onError={handleError}
         unoptimized
         className="zoomable-artwork-image"

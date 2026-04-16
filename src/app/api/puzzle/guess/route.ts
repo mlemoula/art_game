@@ -247,7 +247,6 @@ export async function POST(request: NextRequest) {
   }
 
   const targetProfile = await fetchArtistProfile(targetArtist)
-  const artistInitial = targetArtist ? targetArtist.charAt(0).toUpperCase() : null
   const revealPayload = {
     title: typeof artwork.title === 'string' ? artwork.title : null,
     artist: targetArtist,
@@ -259,7 +258,6 @@ export async function POST(request: NextRequest) {
       typeof artwork.wiki_artist_summary_url === 'string'
         ? artwork.wiki_artist_summary_url
         : null,
-    artist_initial: artistInitial,
     target_profile: targetProfile,
   }
 
