@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
     Array.isArray(body.usedGuesses)
       ? body.usedGuesses
           .filter((value: unknown): value is string => typeof value === 'string')
-          .map((value) => normalizeString(value))
+          .map((value: string) => normalizeString(value))
       : []
   )
 
