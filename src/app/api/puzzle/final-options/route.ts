@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
   const usedGuesses = new Set(
     Array.isArray(body.usedGuesses)
       ? body.usedGuesses
-          .filter((value): value is string => typeof value === 'string')
+          .filter((value: unknown): value is string => typeof value === 'string')
           .map((value) => normalizeString(value))
       : []
   )
