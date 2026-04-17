@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
     .order('name', { ascending: true })
     .limit(1000)
 
-  const usedGuesses = new Set(
+  const usedGuesses = new Set<string>(
     Array.isArray(body.usedGuesses)
       ? body.usedGuesses
           .filter((value: unknown): value is string => typeof value === 'string')

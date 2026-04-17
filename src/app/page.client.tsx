@@ -1253,6 +1253,7 @@ export default function Home({ initialDate }: HomeProps) {
           response.ok &&
           payload &&
           typeof payload === 'object' &&
+          'options' in payload &&
           Array.isArray(payload.options)
         ) {
           const options = payload.options.filter(
