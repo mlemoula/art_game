@@ -8,7 +8,6 @@ export const HOME_DESCRIPTION =
   'A daily art quiz: one painting, 5 tries to guess the artist. Test your art history knowledge with works by Vermeer, Monet, Picasso and more.'
 const PUZZLE_DESCRIPTION =
   'Daily art puzzle: zoom out in 5 tries and guess the painter without spoilers.'
-const TWITTER_SITE = '@getlira'
 const OG_IMAGE_TYPE = 'image/png'
 
 export const normalizeDateParam = (value?: string | string[]) =>
@@ -87,7 +86,6 @@ const BASE_METADATA: Metadata = {
     title: HOME_TITLE,
     description: HOME_DESCRIPTION,
     images: DEFAULT_OG_IMAGE,
-    site: TWITTER_SITE,
   },
 }
 

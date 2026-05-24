@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getTodayDateKey, resolvePlayableDate } from '@/lib/dateUtils'
-import { supabase } from '@/lib/supabaseClient'
+import {
+  getCachedDailyArtwork,
+  getCachedArtistProfile,
+  getCachedCanonicalArtistName,
+  type ArtistProfile,
+} from '@/lib/artCache'
 
 const MAX_ATTEMPTS = 5
 const ASSUMED_MAX_ARTIST_AGE = 85
@@ -14,19 +19,11 @@ type FeedbackDetail = {
   status: FeedbackStatus
 }
 
-type ArtistProfile = {
-  movement: string | null
-  country: string | null
-  birth_year: number | null
-  death_year: number | null
-  popularity_score: number | null
-}
-
 const normalizeString = (value: string) =>
   value
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .trim()
 
 const normalizeGuess = (value: unknown) =>
@@ -35,87 +32,6 @@ const normalizeGuess = (value: unknown) =>
 const parseAttemptsUsed = (value: unknown) => {
   if (typeof value !== 'number' || Number.isNaN(value)) return 0
   return Math.max(0, Math.floor(value))
-}
-
-const resolveCanonicalArtistName = async (name: string): Promise<string | null> => {
-  if (!name) return null
-
-  const { data: exactRows, error: exactError } = await supabase
-    .from('artists')
-    .select('name')
-    .ilike('name', name)
-    .limit(10)
-
-  if (exactError) {
-    return null
-  }
-
-  const normalizedName = normalizeString(name)
-  const exactMatch = (exactRows ?? []).find(
-    (row) =>
-      typeof row.name === 'string' &&
-      normalizeString(row.name) === normalizedName
-  )
-
-  if (exactMatch?.name) {
-    return exactMatch.name
-  }
-
-  const { data: candidateRows, error: candidateError } = await supabase
-    .from('artists')
-    .select('name')
-    .ilike('name', `%${name}%`)
-    .limit(25)
-
-  if (candidateError) {
-    return null
-  }
-
-  const candidateMatch = (candidateRows ?? []).find(
-    (row) =>
-      typeof row.name === 'string' &&
-      normalizeString(row.name) === normalizedName
-  )
-
-  return candidateMatch?.name ?? null
-}
-
-const fetchArtistProfile = async (name: string): Promise<ArtistProfile | null> => {
-  if (!name) return null
-  const { data: exact, error: exactError } = await supabase
-    .from('artists')
-    .select('movement, country, birth_year, death_year, popularity_score')
-    .ilike('name', name)
-    .maybeSingle()
-  if (exact) {
-    return {
-      movement: typeof exact.movement === 'string' ? exact.movement : null,
-      country: typeof exact.country === 'string' ? exact.country : null,
-      birth_year: typeof exact.birth_year === 'number' ? exact.birth_year : null,
-      death_year: typeof exact.death_year === 'number' ? exact.death_year : null,
-      popularity_score:
-        typeof exact.popularity_score === 'number' ? exact.popularity_score : null,
-    }
-  }
-  if (exactError && exactError.code !== 'PGRST116') return null
-
-  const { data: fuzzyRows } = await supabase
-    .from('artists')
-    .select('movement, country, birth_year, death_year, popularity_score')
-    .ilike('name', `%${name}%`)
-    .order('popularity_score', { ascending: false })
-    .limit(1)
-
-  const fuzzy = fuzzyRows?.[0]
-  if (!fuzzy) return null
-  return {
-    movement: typeof fuzzy.movement === 'string' ? fuzzy.movement : null,
-    country: typeof fuzzy.country === 'string' ? fuzzy.country : null,
-    birth_year: typeof fuzzy.birth_year === 'number' ? fuzzy.birth_year : null,
-    death_year: typeof fuzzy.death_year === 'number' ? fuzzy.death_year : null,
-    popularity_score:
-      typeof fuzzy.popularity_score === 'number' ? fuzzy.popularity_score : null,
-  }
 }
 
 const buildFeedback = ({
@@ -230,54 +146,47 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Puzzle not found' }, { status: 404 })
   }
 
-  const { data: artwork, error } = await supabase
-    .from('daily_art')
-    .select(
-      'id, date, title, artist, year, museum, image_url, cached_image_url, wiki_summary_url, wiki_artist_summary_url'
-    )
-    .eq('date', playableDate)
-    .maybeSingle()
-  if (error || !artwork) {
+  const giveUp = Boolean(body.giveUp)
+  const guess = giveUp ? '' : normalizeGuess(body.guess)
+
+  // ── Round 1: parallel ─────────────────────────────────────────────────────
+  // Artwork (cached) + canonical name resolution (cached) run simultaneously.
+  // Skip canonical lookup entirely on give-up to save a round-trip.
+  const [artwork, canonicalGuess] = await Promise.all([
+    getCachedDailyArtwork(playableDate),
+    giveUp ? Promise.resolve(null) : getCachedCanonicalArtistName(guess),
+  ])
+
+  if (!artwork) {
     return NextResponse.json({ error: 'Puzzle not found' }, { status: 404 })
   }
 
-  const targetArtist = typeof artwork.artist === 'string' ? artwork.artist.trim() : ''
+  const targetArtist = artwork.artist
   if (!targetArtist) {
     return NextResponse.json({ error: 'Puzzle answer unavailable' }, { status: 500 })
   }
 
-  const targetProfile = await fetchArtistProfile(targetArtist)
-  const revealPayload = {
-    title: typeof artwork.title === 'string' ? artwork.title : null,
-    artist: targetArtist,
-    year: typeof artwork.year === 'string' ? artwork.year : null,
-    museum: typeof artwork.museum === 'string' ? artwork.museum : null,
-    wiki_summary_url:
-      typeof artwork.wiki_summary_url === 'string' ? artwork.wiki_summary_url : null,
-    wiki_artist_summary_url:
-      typeof artwork.wiki_artist_summary_url === 'string'
-        ? artwork.wiki_artist_summary_url
-        : null,
-    target_profile: targetProfile,
-  }
-
-  const giveUp = Boolean(body.giveUp)
+  // ── Give-up path ──────────────────────────────────────────────────────────
   if (giveUp) {
+    const targetProfile = await getCachedArtistProfile(targetArtist)
     return NextResponse.json({
       correct: false,
       finished: true,
       success: false,
       feedback: [] as FeedbackDetail[],
-      revealedArtwork: revealPayload,
+      revealedArtwork: {
+        title: artwork.title,
+        artist: targetArtist,
+        year: artwork.year,
+        museum: artwork.museum,
+        wiki_summary_url: artwork.wiki_summary_url,
+        wiki_artist_summary_url: artwork.wiki_artist_summary_url,
+        target_profile: targetProfile,
+      },
     })
   }
 
-  const guess = normalizeGuess(body.guess)
-  if (!guess) {
-    return NextResponse.json({ error: 'Guess is required' }, { status: 400 })
-  }
-
-  const canonicalGuess = await resolveCanonicalArtistName(guess)
+  // ── Normal guess path ─────────────────────────────────────────────────────
   if (!canonicalGuess) {
     return NextResponse.json(
       { error: 'Choose an artist from the suggestions list.' },
@@ -289,19 +198,37 @@ export async function POST(request: NextRequest) {
   if (attemptsUsed >= MAX_ATTEMPTS) {
     return NextResponse.json({ error: 'No more attempts remaining' }, { status: 400 })
   }
+
   const guessNorm = normalizeString(canonicalGuess)
   const targetNorm = normalizeString(targetArtist)
   const targetLastName = normalizeString(targetArtist.split(' ').filter(Boolean).pop() || '')
-  const correct = guessNorm === targetNorm || (targetLastName && guessNorm === targetLastName)
+  const correct = guessNorm === targetNorm || (!!targetLastName && guessNorm === targetLastName)
 
-  const guessedProfile = correct ? targetProfile : await fetchArtistProfile(canonicalGuess)
+  // ── Round 2: parallel ─────────────────────────────────────────────────────
+  // Target profile (always needed for reveal) + guessed profile (only if wrong)
+  // both served from cache → single network call each at most.
+  const [targetProfile, guessedProfile] = await Promise.all([
+    getCachedArtistProfile(targetArtist),
+    correct ? Promise.resolve(null) : getCachedArtistProfile(canonicalGuess),
+  ])
+
+  const revealPayload = {
+    title: artwork.title,
+    artist: targetArtist,
+    year: artwork.year,
+    museum: artwork.museum,
+    wiki_summary_url: artwork.wiki_summary_url,
+    wiki_artist_summary_url: artwork.wiki_artist_summary_url,
+    target_profile: targetProfile,
+  }
+
   const feedback = correct
     ? ([] as FeedbackDetail[])
     : buildFeedback({
         guessedProfile,
         targetProfile,
         guessName: canonicalGuess,
-        artYear: typeof artwork.year === 'string' ? artwork.year : null,
+        artYear: artwork.year,
       })
 
   const nextAttempts = attemptsUsed + 1

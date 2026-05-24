@@ -1,7 +1,11 @@
 // src/app/api/today/route.ts
-import { supabase } from '@/lib/supabaseClient'
 import { NextRequest, NextResponse } from 'next/server'
 import { getTodayDateKey, resolvePlayableDate } from '@/lib/dateUtils'
+import {
+  getCachedDailyArtwork,
+  getCachedArtistProfile,
+  getCachedMovementPeers,
+} from '@/lib/artCache'
 
 type PuzzlePayload = {
   id: number
@@ -49,67 +53,47 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  const { data, error } = await supabase
-    .from('daily_art')
-    .select('id, date, image_url, cached_image_url, year, museum, artist')
-    .eq('date', targetStr)
-    .maybeSingle()
-
-  if (error) {
-    const status = error.code === 'PGRST116' ? 404 : 500
-    return NextResponse.json({ error: error.message }, { status })
-  }
-  if (!data) {
+  // ── Step 1: artwork (cached) ──────────────────────────────────────────────
+  const artwork = await getCachedDailyArtwork(targetStr)
+  if (!artwork) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  const artistName = typeof data.artist === 'string' ? data.artist.trim() : ''
+  const artistName = artwork.artist
+
+  // ── Step 2: artist profile + movement peers (parallel, both cached) ───────
   let targetProfile: PuzzlePayload['target_profile'] = null
+
   if (artistName) {
-    const { data: artistData } = await supabase
-      .from('artists')
-      .select('movement, country, birth_year, death_year, popularity_score')
-      .ilike('name', artistName)
-      .maybeSingle()
+    const artistData = await getCachedArtistProfile(artistName)
+
     if (artistData) {
-      const movement = typeof artistData.movement === 'string' ? artistData.movement : null
-      let movementPeers: string[] = []
-      if (movement) {
-        const { data: peerRows } = await supabase
-          .from('artists')
-          .select('name')
-          .ilike('movement', movement)
-          .neq('name', artistName)
-          .order('popularity_score', { ascending: false })
-          .limit(3)
-        if (peerRows) {
-          movementPeers = peerRows
-            .map((r) => (typeof r.name === 'string' ? r.name : ''))
-            .filter(Boolean)
-        }
-      }
+      const movement = artistData.movement
+
+      // Fetch movement peers in parallel with nothing else left to do —
+      // but avoid the extra query when there's no movement to look up.
+      const movementPeers = movement
+        ? await getCachedMovementPeers(movement, artistName)
+        : []
+
       targetProfile = {
         movement,
-        country: typeof artistData.country === 'string' ? artistData.country : null,
-        birth_year: typeof artistData.birth_year === 'number' ? artistData.birth_year : null,
-        death_year: typeof artistData.death_year === 'number' ? artistData.death_year : null,
-        popularity_score:
-          typeof artistData.popularity_score === 'number'
-            ? artistData.popularity_score
-            : null,
+        country: artistData.country,
+        birth_year: artistData.birth_year,
+        death_year: artistData.death_year,
+        popularity_score: artistData.popularity_score,
         movement_peers: movementPeers,
       }
     }
   }
 
   const payload: PuzzlePayload = {
-    id: data.id,
-    date: data.date,
-    image_url: data.image_url,
-    cached_image_url:
-      typeof data.cached_image_url === 'string' ? data.cached_image_url : null,
-    year: typeof data.year === 'string' ? data.year : null,
-    museum: typeof data.museum === 'string' ? data.museum : null,
+    id: artwork.id,
+    date: artwork.date,
+    image_url: artwork.image_url,
+    cached_image_url: artwork.cached_image_url,
+    year: artwork.year,
+    museum: artwork.museum,
     target_profile: targetProfile,
   }
 

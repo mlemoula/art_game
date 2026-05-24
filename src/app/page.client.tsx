@@ -175,8 +175,8 @@ const FEEDBACK_TONES: Record<FeedbackStatus, string> = {
 }
 
 const getAttemptGlyph = (attempt?: { correct: boolean } | null) => {
-  if (!attempt) return '.'
-  return attempt.correct ? '✅' : '×'
+  if (!attempt) return '⬜'
+  return attempt.correct ? '🟩' : '🟥'
 }
 
 const normalizeSuccessFlag = (value: unknown): boolean => {
@@ -333,7 +333,7 @@ export default function Home({ initialDate }: HomeProps) {
         }
         if (dateParam && dateParam > todayKey) {
           setFetchError(
-            `The puzzle for ${formatFriendlyDate(dateParam)} isn’t available yet. Check back when the new entry drops.`
+            `The puzzle for ${formatFriendlyDate(dateParam)} isn't available yet. Check back when the new entry drops.`
           )
           setArt(null)
           return
@@ -346,7 +346,7 @@ export default function Home({ initialDate }: HomeProps) {
         console.error('Unable to load artwork', error)
         const normalizedMessage =
           message === 'Not found' && dateParam
-            ? `Puzzle for ${formatFriendlyDate(dateParam)} isn’t available right now.`
+            ? `Puzzle for ${formatFriendlyDate(dateParam)} isn't available right now.`
             : message
         setFetchError(normalizedMessage)
         setArt(null)
@@ -447,7 +447,7 @@ export default function Home({ initialDate }: HomeProps) {
     ? mobileSafeCachedArtSrc
     : shouldFallbackToThumbOnMobile
     ? thumb || mediumSource || hdSource || ''
-    : mediumSource ?? thumb ?? hdSource ?? ''
+    : thumb ?? mediumSource ?? hdSource ?? ''
   const canLoadHdOnMobile =
     viewportState !== 'mobile' ||
     (isMeasurementComplete && wikimediaSizeKnown && !isHeavyWikimedia)
@@ -1029,11 +1029,8 @@ export default function Home({ initialDate }: HomeProps) {
       const attempt = attemptsHistory[idx]
       return getAttemptGlyph(attempt)
     })
-    if (gaveUp && finished && !success) {
-      return tokens.map((token) => (token === '.' ? '×' : token)).join(' ')
-    }
     return tokens.join(' ')
-  }, [attemptsHistory, maxAttempts, gaveUp, finished, success])
+  }, [attemptsHistory, maxAttempts])
 
   const buildSharePayload = () => {
     if (!art || !finished) return null
@@ -1044,20 +1041,24 @@ export default function Home({ initialDate }: HomeProps) {
           : 'https://whopaintedthis.vercel.app'))
     const path = art.date ? `/puzzle/${encodeURIComponent(art.date)}` : '/'
     const shareUrl = `${appUrl}${path}`
-    const attemptLine = success
-      ? 'Puzzle solved.'
-      : 'I didn’t get it…'
-    const inviteLine = success
-      ? 'Can you beat me?'
-      : 'Think you can?'
-    const pitchLines = [
-      'Who painted this? · One-minute art puzzle',
-      attemptLine,
-      shareGlyphs,
-      inviteLine,
-    ].filter(Boolean)
-    const text = pitchLines.join('\n')
-    const textWithUrl = [text, shareUrl].filter(Boolean).join('\n')
+
+    // Compact glyphs (no spaces) for the share line — more impactful
+    const compactGlyphs = Array.from({ length: maxAttempts }, (_, idx) =>
+      getAttemptGlyph(attemptsHistory[idx])
+    ).join('')
+
+    const score = success
+      ? `${attemptsHistory.length}/${maxAttempts}`
+      : `X/${maxAttempts}`
+
+    const text = [
+      `🎨 Who Painted This? — ${score}`,
+      compactGlyphs,
+      '@dailyartguess',
+    ].join('\n')
+
+    const textWithUrl = [text, shareUrl].join('\n')
+
     return {
       text,
       url: shareUrl,
@@ -1303,7 +1304,7 @@ export default function Home({ initialDate }: HomeProps) {
           href="/"
           className="mt-3 text-xs uppercase tracking-[0.4em] text-slate-500 dark:text-slate-400 underline decoration-dotted"
         >
-          Return to today’s puzzle
+          Return to today's puzzle
         </Link>
       </div>
     )
