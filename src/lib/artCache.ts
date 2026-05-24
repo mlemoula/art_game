@@ -153,6 +153,22 @@ export const getCachedCanonicalArtistName = unstable_cache(
   { revalidate: 86400 }
 )
 
+// ─── Puzzle number ────────────────────────────────────────────────────────────
+// Count of artworks with date <= given date = sequential puzzle number.
+// Stable for past dates → cache for 7 days.
+export const getCachedPuzzleNumber = unstable_cache(
+  async (date: string): Promise<number | null> => {
+    const { count, error } = await supabase
+      .from('daily_art')
+      .select('*', { count: 'exact', head: true })
+      .lte('date', date)
+    if (error || count === null) return null
+    return count
+  },
+  ['puzzle-number'],
+  { revalidate: 604800 }
+)
+
 // ─── Movement peers ───────────────────────────────────────────────────────────
 // Static → cache for 7 days
 export const getCachedMovementPeers = unstable_cache(

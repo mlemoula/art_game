@@ -117,6 +117,7 @@ interface DailyArt {
   wiki_summary_url?: string | null
   cached_image_url?: string | null
   wiki_artist_summary_url?: string | null
+  puzzle_number?: number | null
   target_profile?: {
     movement?: string | null
     country?: string | null
@@ -154,7 +155,7 @@ interface Attempt {
 interface CommunityStats {
   total: number
   successRate: number
-  fastRate: number
+  distribution: Record<number, number>
 }
 
 interface UserStats {
@@ -1051,10 +1052,11 @@ export default function Home({ initialDate }: HomeProps) {
       ? `${attemptsHistory.length}/${maxAttempts}`
       : `X/${maxAttempts}`
 
+    const puzzleTag = art.puzzle_number ? `#${art.puzzle_number} ` : ''
+
     const text = [
-      `🎨 Who Painted This? — ${score}`,
+      `🎨 Who Painted This? ${puzzleTag}— ${score}`,
       compactGlyphs,
-      '@dailyartguess',
     ].join('\n')
 
     const textWithUrl = [text, shareUrl].join('\n')
@@ -1123,19 +1125,17 @@ export default function Home({ initialDate }: HomeProps) {
             return
           }
           const successCount = data.filter((row) => normalizeSuccessFlag(row.success)).length
-          const fastWins = data.filter(
-            (row) =>
-              normalizeSuccessFlag(row.success) &&
-              typeof row.attempts === 'number' &&
-              (row.attempts ?? 0) <= 3
-          ).length
           const successRate = Math.round((successCount / total) * 100)
-          const fastRate = Math.round((fastWins / total) * 100)
-          setCommunityStats({
-            total,
-            successRate,
-            fastRate,
-          })
+          const distribution: Record<number, number> = {}
+          for (let n = 1; n <= 5; n++) {
+            distribution[n] = data.filter(
+              (row) =>
+                normalizeSuccessFlag(row.success) &&
+                typeof row.attempts === 'number' &&
+                row.attempts === n
+            ).length
+          }
+          setCommunityStats({ total, successRate, distribution })
         }
       } catch {
         if (!cancelled) setCommunityStats(null)
@@ -1638,7 +1638,7 @@ export default function Home({ initialDate }: HomeProps) {
     : ''
   const streakBadge =
     playStats?.currentStreak && playStats.currentStreak >= 2
-      ? `${playStats.currentStreak}-day streak`
+      ? `${playStats.currentStreak >= 3 ? '🔥 ' : ''}${playStats.currentStreak}-day streak`
       : null
   const frameOuterClass = finished
     ? 'frame-outer w-full sm:w-auto rounded-none border border-slate-200 shadow-sm transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] mx-auto overflow-hidden p-3 sm:p-4'
@@ -2176,17 +2176,34 @@ export default function Home({ initialDate }: HomeProps) {
             <div className="pt-3 border-t border-gray-100 space-y-3">
             {communityStats ? (
               <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3 stats-panel">
-                <p className="text-[10px] uppercase tracking-[0.35em] text-gray-400">Community stats</p>
-                  <p className="mt-2 text-[11px] text-gray-600">
-                    {communityStats.total === 1
-                      ? '1 person has played today'
-                      : `${communityStats.total} have played this puzzle`}
-                  </p>
-                  <p className="text-[11px] text-gray-600">
-                    {communityStats.successRate}% solved • {communityStats.fastRate}% in 3 tries or fewer
+                <div className="flex items-baseline justify-between mb-2">
+                  <p className="text-[10px] uppercase tracking-[0.35em] text-gray-400">Today&apos;s results</p>
+                  <p className="text-[10px] text-gray-400">
+                    {communityStats.total} {communityStats.total === 1 ? 'player' : 'players'} · {communityStats.successRate}% solved
                   </p>
                 </div>
-              ) : null}
+                <div className="space-y-1">
+                  {[1, 2, 3, 4, 5].map((n) => {
+                    const count = communityStats.distribution[n] ?? 0
+                    const maxCount = Math.max(...Object.values(communityStats.distribution), 1)
+                    const pct = Math.round((count / maxCount) * 100)
+                    const isMyScore = success && attemptsHistory.length === n
+                    return (
+                      <div key={n} className="flex items-center gap-2">
+                        <span className="w-3 text-[10px] text-gray-400 text-right shrink-0">{n}</span>
+                        <div className="flex-1 bg-gray-200 rounded-sm h-3 overflow-hidden">
+                          <div
+                            className={`h-full rounded-sm transition-all duration-500 ${isMyScore ? 'bg-gray-900' : 'bg-gray-400'}`}
+                            style={{ width: pct > 0 ? `${Math.max(pct, 4)}%` : '0%' }}
+                          />
+                        </div>
+                        <span className="w-5 text-[10px] text-gray-400 text-right shrink-0">{count}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
               {attemptsHistory.length > 0 ? (
                 <div className="rounded-2xl border border-gray-100 p-3 attempt-breakdown">
                   <button
@@ -2305,16 +2322,15 @@ export default function Home({ initialDate }: HomeProps) {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-6">
           <div className="max-w-sm w-full bg-white border border-gray-200 rounded-2xl p-5 text-sm text-gray-700 space-y-3 shadow-2xl">
             <p className="text-xs uppercase tracking-wide text-gray-500">How it works</p>
-			<p>
-			  Guess the painter in up to five tries. Each wrong guess zooms out the image, revealing more of the artwork.
-			</p>
-			<ul className="text-xs text-gray-600 space-y-1 list-disc list-inside">
-			  <li>Start by looking at a tight detail of the painting.</li>
-			  <li>Type the name of the artist you think painted it.</li>
-				  <li>Each wrong guess reveals more of the artwork and a little more context.</li>
-              <li>On your final try, you&apos;ll get four artists to choose from.</li>
-			  <li>The image de-zooms until the full painting is fully revealed.</li>
-			</ul>
+            <p className="text-sm text-gray-800 leading-relaxed">
+              A new painting every day. You have <strong>5 tries</strong> to name the artist.
+            </p>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Each wrong guess de-zooms the image — a bit more revealed, a few more clues. On the last try, four artists to choose from.
+            </p>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              After each puzzle, learn something about the work and its creator.
+            </p>
             <div className="flex justify-end">
               <button
                 type="button"

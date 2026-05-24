@@ -5,6 +5,7 @@ import {
   getCachedDailyArtwork,
   getCachedArtistProfile,
   getCachedMovementPeers,
+  getCachedPuzzleNumber,
 } from '@/lib/artCache'
 
 type PuzzlePayload = {
@@ -14,6 +15,7 @@ type PuzzlePayload = {
   cached_image_url: string | null
   year: string | null
   museum: string | null
+  puzzle_number: number | null
   target_profile: {
     movement: string | null
     country: string | null
@@ -53,8 +55,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  // ── Step 1: artwork (cached) ──────────────────────────────────────────────
-  const artwork = await getCachedDailyArtwork(targetStr)
+  // ── Step 1: artwork + puzzle number (parallel, both cached) ─────────────
+  const [artwork, puzzleNumber] = await Promise.all([
+    getCachedDailyArtwork(targetStr),
+    getCachedPuzzleNumber(targetStr),
+  ])
   if (!artwork) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
@@ -94,6 +99,7 @@ export async function GET(request: NextRequest) {
     cached_image_url: artwork.cached_image_url,
     year: artwork.year,
     museum: artwork.museum,
+    puzzle_number: puzzleNumber,
     target_profile: targetProfile,
   }
 
