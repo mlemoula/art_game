@@ -16,6 +16,7 @@ type PuzzlePayload = {
     birth_year: number | null
     death_year: number | null
     popularity_score: number | null
+    movement_peers: string[]
   } | null
 }
 
@@ -71,8 +72,24 @@ export async function GET(request: NextRequest) {
       .ilike('name', artistName)
       .maybeSingle()
     if (artistData) {
+      const movement = typeof artistData.movement === 'string' ? artistData.movement : null
+      let movementPeers: string[] = []
+      if (movement) {
+        const { data: peerRows } = await supabase
+          .from('artists')
+          .select('name')
+          .ilike('movement', movement)
+          .neq('name', artistName)
+          .order('popularity_score', { ascending: false })
+          .limit(3)
+        if (peerRows) {
+          movementPeers = peerRows
+            .map((r) => (typeof r.name === 'string' ? r.name : ''))
+            .filter(Boolean)
+        }
+      }
       targetProfile = {
-        movement: typeof artistData.movement === 'string' ? artistData.movement : null,
+        movement,
         country: typeof artistData.country === 'string' ? artistData.country : null,
         birth_year: typeof artistData.birth_year === 'number' ? artistData.birth_year : null,
         death_year: typeof artistData.death_year === 'number' ? artistData.death_year : null,
@@ -80,6 +97,7 @@ export async function GET(request: NextRequest) {
           typeof artistData.popularity_score === 'number'
             ? artistData.popularity_score
             : null,
+        movement_peers: movementPeers,
       }
     }
   }

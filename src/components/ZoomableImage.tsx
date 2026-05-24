@@ -229,7 +229,11 @@ export default function ZoomableImage({
         }}
         initial={{ scale: zoom }}
         animate={{ scale: zoom }}
-        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+        transition={
+          fit === 'contain'
+            ? { duration: 0.85, ease: [0.16, 1, 0.3, 1] }
+            : { duration: 0.25, ease: [0.4, 0, 0.2, 1] }
+        }
       />
     </div>
   )

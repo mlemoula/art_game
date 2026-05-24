@@ -45,6 +45,10 @@ const STORY_ART_LEFT = 120
 const STORY_ART_TOP = 410
 const STORY_ART_WIDTH = 840
 const STORY_ART_HEIGHT = 760
+const REVEAL_ART_LEFT = 76
+const REVEAL_ART_TOP = 128
+const REVEAL_ART_WIDTH = 928
+const REVEAL_ART_HEIGHT = 612
 
 // Zoom fractions for the carousel: 22 % → 45 % → 72 % → 100 %
 // Mirrors the progressive dézoom mechanic of the game.
@@ -382,7 +386,7 @@ const buildCaption = ({ clueText, hashtags, paintingWikiSnippet }) => {
   lines.push(
     '',
     'Drop your guess below 👇',
-    'New puzzle every day → link in bio.',
+    'New puzzle every day.',
     '',
     hashtags.join(' ')
   )
@@ -428,7 +432,6 @@ const buildRevealCaption = ({
 
   lines.push(
     `🎨 Today's new puzzle is live.`,
-    'Link in bio.',
     '',
     hashtags.join(' ')
   )
@@ -535,13 +538,8 @@ const createCarouselOverlay = ({ brandName, slideIndex, totalSlides, clueShort, 
       ${clueLines.map((l, i) => `<text x="108" y="${828 + i * 52}" font-size="40" font-family="Georgia, serif" fill="#fff7e8">${escapeXml(l)}</text>`).join('')}
     `
   } else if (isLast) {
-    // CTA anchored to the bottom — painting shows freely above it.
-    // Stronger gradient ensures legibility without cutting the composition.
-    bottomContent = `
-      <rect x="80" y="860" rx="44" ry="44" width="920" height="152" fill="#f2e8d7" />
-      <text x="540" y="930" font-size="34" font-family="Arial, sans-serif" letter-spacing="4" fill="#1d1c1a" text-anchor="middle">LINK IN BIO</text>
-      <text x="540" y="974" font-size="26" font-family="Arial, sans-serif" fill="#51483d" text-anchor="middle">Play today's puzzle</text>
-    `
+    // Keep the final slide visually open so a manual CTA can be added later.
+    bottomContent = ''
   }
 
   // Last slide gets a heavier bottom gradient so the painting shows clearly
@@ -653,23 +651,23 @@ const createRevealOverlay = ({ brandName, artist, title, year, museum, date }) =
   const titleLines = wrapText(title || 'Untitled', 38)
   const museumCity = museum ? museum.split(',').map((s) => s.trim()).pop() : null
   const metaLine = [year, museumCity].filter(Boolean).join(' · ')
-  const cardTop = 690
-  const cardHeight = 390
+  const cardTop = 730
+  const cardHeight = 320
   const labelY = cardTop + 54
-  const artistStartY = cardTop + 138
-  const artistLineHeight = 82
-  const titleStartY = artistStartY + artistLines.length * artistLineHeight + 56
-  const titleLineHeight = 46
-  const metaY = titleStartY + titleLines.length * titleLineHeight + 44
+  const artistStartY = cardTop + 128
+  const artistLineHeight = 64
+  const titleStartY = artistStartY + artistLines.length * artistLineHeight + 44
+  const titleLineHeight = 38
+  const metaY = titleStartY + titleLines.length * titleLineHeight + 34
 
   const artistSvg = artistLines
     .map((line, i) =>
-      `<text x="540" y="${artistStartY + i * artistLineHeight}" font-size="72" font-family="Georgia, serif" fill="#ffffff" text-anchor="middle">${escapeXml(line)}</text>`
+      `<text x="540" y="${artistStartY + i * artistLineHeight}" font-size="56" font-family="Georgia, serif" fill="#ffffff" text-anchor="middle">${escapeXml(line)}</text>`
     )
     .join('')
   const titleSvg = titleLines
     .map((line, i) =>
-      `<text x="540" y="${titleStartY + i * titleLineHeight}" font-size="38" font-family="Georgia, serif" fill="rgba(255,247,232,0.82)" text-anchor="middle" font-style="italic">${escapeXml(line)}</text>`
+      `<text x="540" y="${titleStartY + i * titleLineHeight}" font-size="30" font-family="Georgia, serif" fill="rgba(255,247,232,0.82)" text-anchor="middle" font-style="italic">${escapeXml(line)}</text>`
     )
     .join('')
 
@@ -685,11 +683,12 @@ const createRevealOverlay = ({ brandName, artist, title, year, museum, date }) =
       <rect width="100%" height="100%" fill="url(#fade)" />
       <text x="88" y="96" font-size="28" font-family="Arial, sans-serif" letter-spacing="6" fill="#fff7e8">${escapeXml(brandName.toUpperCase())}</text>
       <text x="${POST_SIZE - 88}" y="96" font-size="24" font-family="Arial, sans-serif" letter-spacing="3" fill="rgba(255,247,232,0.55)" text-anchor="end">YESTERDAY'S ANSWER</text>
-      <rect x="0" y="${cardTop}" width="${POST_SIZE}" height="${cardHeight}" fill="rgba(12,12,14,0.72)" />
+      <rect x="${REVEAL_ART_LEFT - 10}" y="${REVEAL_ART_TOP - 10}" width="${REVEAL_ART_WIDTH + 20}" height="${REVEAL_ART_HEIGHT + 20}" rx="32" ry="32" fill="rgba(8,8,10,0.26)" />
+      <rect x="44" y="${cardTop}" width="${POST_SIZE - 88}" height="${cardHeight}" rx="36" ry="36" fill="rgba(12,12,14,0.78)" />
       <text x="540" y="${labelY}" font-size="20" font-family="Arial, sans-serif" letter-spacing="6" fill="#d4c6af" text-anchor="middle">THE ARTIST WAS</text>
       ${artistSvg}
       ${titleSvg}
-      ${metaLine ? `<text x="540" y="${metaY}" font-size="24" font-family="Arial, sans-serif" fill="rgba(255,247,232,0.5)" text-anchor="middle">${escapeXml(metaLine)}</text>` : ''}
+      ${metaLine ? `<text x="540" y="${metaY}" font-size="22" font-family="Arial, sans-serif" fill="rgba(255,247,232,0.5)" text-anchor="middle">${escapeXml(metaLine)}</text>` : ''}
       <text x="88" y="${POST_SIZE - 40}" font-size="22" font-family="Arial, sans-serif" letter-spacing="2" fill="rgba(255,247,232,0.4)">${escapeXml(date)}</text>
     </svg>
   `)
@@ -764,6 +763,44 @@ const buildStoryAsset = async ({ normalizedImage, overlayBuffer, outputPath }) =
         `),
       },
       { input: card, left: STORY_ART_LEFT, top: STORY_ART_TOP },
+      { input: overlayBuffer },
+    ])
+    .jpeg({ quality: 86, mozjpeg: true })
+    .toBuffer()
+
+  fs.writeFileSync(outputPath, finalBuffer)
+}
+
+/**
+ * Build the square reveal: blurred square background + full artwork contained in frame + overlay.
+ */
+const buildRevealAsset = async ({ normalizedImage, overlayBuffer, outputPath }) => {
+  const { buffer } = normalizedImage
+
+  const background = await sharp(buffer)
+    .resize(POST_SIZE, POST_SIZE, { fit: 'cover', position: 'attention' })
+    .blur(16)
+    .modulate({ brightness: 0.68, saturation: 0.9 })
+    .toBuffer()
+
+  const artwork = await sharp(buffer)
+    .resize(REVEAL_ART_WIDTH, REVEAL_ART_HEIGHT, {
+      fit: 'contain',
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
+    .png()
+    .toBuffer()
+
+  const finalBuffer = await sharp(background)
+    .composite([
+      {
+        input: Buffer.from(`
+          <svg width="${POST_SIZE}" height="${POST_SIZE}" viewBox="0 0 ${POST_SIZE} ${POST_SIZE}" xmlns="http://www.w3.org/2000/svg">
+            <rect x="${REVEAL_ART_LEFT - 10}" y="${REVEAL_ART_TOP - 10}" width="${REVEAL_ART_WIDTH + 20}" height="${REVEAL_ART_HEIGHT + 20}" rx="34" ry="34" fill="rgba(10,10,12,0.24)" />
+          </svg>
+        `),
+      },
+      { input: artwork, left: REVEAL_ART_LEFT, top: REVEAL_ART_TOP },
       { input: overlayBuffer },
     ])
     .jpeg({ quality: 86, mozjpeg: true })
@@ -1055,10 +1092,9 @@ const main = async () => {
     outputPath: storyImagePath,
   })
 
-  // Reveal post: full image + answer card overlay
-  await buildSquareCrop({
+  // Reveal post: blurred square background + contained artwork + answer card overlay
+  await buildRevealAsset({
     normalizedImage,
-    zoomFraction: 1.0,
     overlayBuffer: createRevealOverlay({
       brandName,
       artist: artwork.artist,

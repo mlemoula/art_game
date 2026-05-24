@@ -123,6 +123,7 @@ interface DailyArt {
     birth_year?: number | null
     death_year?: number | null
     popularity_score?: number | null
+    movement_peers?: string[] | null
   } | null
 }
 
@@ -230,6 +231,9 @@ export default function Home({ initialDate }: HomeProps) {
   const [viewportState, setViewportState] = useState<ViewportState>('unknown')
   const [wikimediaSizeBytes, setWikimediaSizeBytes] = useState<number | null>(null)
   const [wikimediaSizeStatus, setWikimediaSizeStatus] = useState<'idle' | 'loading' | 'done'>('idle')
+  const [showEmailPrompt, setShowEmailPrompt] = useState(false)
+  const [emailInput, setEmailInput] = useState('')
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
   const maxAttempts = 5
   const inputRef = useRef<HTMLInputElement | null>(null)
   const blurTimeoutRef = useRef<number | null>(null)
@@ -1179,6 +1183,13 @@ export default function Home({ initialDate }: HomeProps) {
     setAttemptsOpen(false)
   }, [finished, artId])
 
+  // Show the email opt-in once, after any completed game
+  useEffect(() => {
+    if (!finished || typeof window === 'undefined') return
+    const alreadyAsked = window.localStorage.getItem('art_game_email_asked')
+    if (!alreadyAsked) setShowEmailPrompt(true)
+  }, [finished])
+
   useEffect(() => {
     setGaveUp(false)
   }, [artId])
@@ -1225,9 +1236,11 @@ export default function Home({ initialDate }: HomeProps) {
     })
     return set
   }, [attemptsHistory, normalize])
+  const shouldPrepareFinalAttemptOptions =
+    !finished && attemptsHistory.length >= maxAttempts - 2
   useEffect(() => {
-    if (!isFinalAttempt || !art?.date) {
-      setFinalAttemptOptions([])
+    if (!shouldPrepareFinalAttemptOptions || !art?.date) {
+      if (!isFinalAttempt) setFinalAttemptOptions([])
       return
     }
 
@@ -1259,12 +1272,13 @@ export default function Home({ initialDate }: HomeProps) {
           const options = payload.options.filter(
             (value): value is string => typeof value === 'string' && Boolean(value.trim())
           )
-          setFinalAttemptOptions(options)
+          if (options.length === 4) {
+            setFinalAttemptOptions(options)
+          }
           return
         }
-        setFinalAttemptOptions([])
       } catch {
-        if (!cancelled) setFinalAttemptOptions([])
+        // keep previously fetched options if refresh fails
       }
     }
 
@@ -1277,6 +1291,7 @@ export default function Home({ initialDate }: HomeProps) {
     art?.date,
     attemptsHistory,
     isFinalAttempt,
+    shouldPrepareFinalAttemptOptions,
   ])
   const showFinalAttemptPicker = isFinalAttempt && finalAttemptOptions.length === 4
 
@@ -1338,7 +1353,10 @@ export default function Home({ initialDate }: HomeProps) {
       ? `✦ Title: ${art.title.trim()}`
       : null
   const paintingLocationHint = `✦ This artwork painted in ${art.year ?? 'unknown year'} can be seen in ${museumClue || 'unknown venues'}`
-  const movementHint = `✦ Movement: ${targetProfile?.movement || 'not documented'}`
+  const movementPeers = targetProfile?.movement_peers ?? []
+  const movementHint = targetProfile?.movement
+    ? `✦ Movement: ${targetProfile.movement}${movementPeers.length ? ` — e.g. ${movementPeers.slice(0, 2).join(', ')}` : ''}`
+    : '✦ Movement: not documented'
   const hintPool = [
     paintingLocationHint,
     movementHint,
@@ -1554,6 +1572,38 @@ export default function Home({ initialDate }: HomeProps) {
     }
   }
 
+  const dismissEmailPrompt = () => {
+    setShowEmailPrompt(false)
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('art_game_email_asked', '1')
+    }
+  }
+
+  const handleEmailSubscribe = async () => {
+    const email = emailInput.trim()
+    if (!email) return
+    setEmailStatus('submitting')
+    try {
+      const res = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      if (res.ok) {
+        setEmailStatus('success')
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('art_game_email_asked', '1')
+        }
+        // Auto-hide after 3 s
+        setTimeout(() => setShowEmailPrompt(false), 3000)
+      } else {
+        setEmailStatus('error')
+      }
+    } catch {
+      setEmailStatus('error')
+    }
+  }
+
   const clearPendingBlur = () => {
     if (blurTimeoutRef.current && typeof window !== 'undefined') {
       window.clearTimeout(blurTimeoutRef.current)
@@ -1590,7 +1640,7 @@ export default function Home({ initialDate }: HomeProps) {
       ? `${playStats.currentStreak}-day streak`
       : null
   const frameOuterClass = finished
-    ? 'frame-outer w-full sm:w-auto rounded-none border border-slate-200 shadow-sm transition-all duration-300 mx-auto overflow-hidden p-3 sm:p-4'
+    ? 'frame-outer w-full sm:w-auto rounded-none border border-slate-200 shadow-sm transition-all duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] mx-auto overflow-hidden p-3 sm:p-4'
     : 'frame-outer w-full max-w-[420px] rounded-none border border-slate-200 transition-all duration-300 overflow-hidden p-2'
   const frameInnerClass = finished
     ? 'frame-inner w-full h-full overflow-hidden rounded-none'
@@ -1795,7 +1845,7 @@ export default function Home({ initialDate }: HomeProps) {
           color: #cbd5f5;
         }
       `}</style>
-      <div className="w-full max-w-[420px] relative flex items-center justify-center gap-2 mb-6 min-h-8">
+      <div className="w-full max-w-[420px] relative flex items-center justify-center gap-2 mb-2 min-h-8">
         <h1 className="text-xl font-normal tracking-tight uppercase text-center px-12 sm:px-0">
           Who painted this?
         </h1>
@@ -1820,6 +1870,9 @@ export default function Home({ initialDate }: HomeProps) {
           Can you guess the painter in up to five tries? Each incorrect guess gradually zooms out to reveal more of the artwork.
         </p>
       </div>
+      <p className="text-[10px] tracking-[0.22em] uppercase text-gray-400 text-center mb-4">
+        One painting a day · zoom out · learn something beautiful
+      </p>
 
       {/* Affiche placeholder jusqu'à ce que l'image jouable soit prête */}
       <div className={frameOuterClass} style={frameOuterStyle}>
@@ -2025,13 +2078,19 @@ export default function Home({ initialDate }: HomeProps) {
               ))}
             </div>
           )}
-          <button
-            type="button"
-            onClick={handleGiveUp}
-            className="w-full text-center text-xs text-gray-500 underline decoration-dotted hover:text-gray-800"
-          >
-            I give up, show me the answer
-          </button>
+          {attemptsHistory.length >= 3 ? (
+            <button
+              type="button"
+              onClick={handleGiveUp}
+              className="w-full text-center text-xs text-gray-500 underline decoration-dotted hover:text-gray-800"
+            >
+              I give up, show me the answer
+            </button>
+          ) : attemptsHistory.length > 0 ? (
+            <p className="w-full text-center text-[10px] text-gray-400 tracking-wide">
+              Give up unlocks after {3 - attemptsHistory.length} more {3 - attemptsHistory.length === 1 ? 'try' : 'tries'}
+            </p>
+          ) : null}
         </div>
       )}
 
@@ -2071,7 +2130,25 @@ export default function Home({ initialDate }: HomeProps) {
 
       {finished && (
         <div className="mt-6 w-full flex flex-col items-center gap-5">
-          <div className="w-full max-w-[360px] border border-gray-200 rounded-2xl p-4 text-left space-y-3 bg-white shadow-sm">
+          <div className="relative w-full max-w-[360px] border border-gray-200 rounded-2xl p-4 text-left space-y-3 bg-white shadow-sm">
+            {success && (
+              <div className="absolute inset-x-0 top-0 h-0 overflow-visible pointer-events-none" aria-hidden="true" style={{ zIndex: 10 }}>
+                {['#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6','#f97316','#06b6d4','#ec4899'].map((color, i) => (
+                  <span
+                    key={color}
+                    className="absolute animate-fall rounded-sm"
+                    style={{
+                      left: `${8 + i * 12}%`,
+                      width: 7,
+                      height: 7,
+                      backgroundColor: color,
+                      animationDelay: `${i * 0.07}s`,
+                      top: 0,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
             <p className="text-[11px] uppercase tracking-[0.35em] text-gray-400">
               <span className="text-gray-900">{outcomeLabel}</span>{' '}
               <span className="text-gray-500">- {outcomeSubline}</span>
@@ -2126,6 +2203,55 @@ export default function Home({ initialDate }: HomeProps) {
               ) : null}
             </div>
           </div>
+          {showEmailPrompt && (
+            <div className="w-full max-w-[360px] border border-gray-200 rounded-2xl p-4 text-center space-y-3 bg-white shadow-sm">
+              {emailStatus === 'success' ? (
+                <p className="text-sm text-emerald-600 py-2">✓ You&apos;re in — see you tomorrow.</p>
+              ) : (
+                <>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-gray-400 mb-1">Come back tomorrow</p>
+                    <p className="text-sm text-gray-800">Get a daily nudge with a preview of the painting.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      placeholder="your@email.com"
+                      value={emailInput}
+                      onChange={(e) => {
+                        setEmailInput(e.target.value)
+                        if (emailStatus === 'error') setEmailStatus('idle')
+                      }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') void handleEmailSubscribe() }}
+                      className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm bg-white min-w-0"
+                      style={{ fontSize: '16px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleEmailSubscribe()}
+                      disabled={emailStatus === 'submitting'}
+                      className="border border-gray-900 text-gray-900 rounded px-4 py-2 text-sm button-hover shrink-0 disabled:opacity-40"
+                    >
+                      {emailStatus === 'submitting' ? '…' : '→'}
+                    </button>
+                  </div>
+                  {emailStatus === 'error' && (
+                    <p className="text-[11px] text-rose-500">Something went wrong — try again.</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={dismissEmailPrompt}
+                    className="text-[10px] text-gray-400 underline decoration-dotted hover:text-gray-600"
+                  >
+                    No thanks
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="w-full text-left space-y-3 max-w-[360px]">
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
               <div className="space-y-2">

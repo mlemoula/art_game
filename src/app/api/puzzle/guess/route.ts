@@ -286,6 +286,9 @@ export async function POST(request: NextRequest) {
   }
 
   const attemptsUsed = parseAttemptsUsed(body.attemptsUsed)
+  if (attemptsUsed >= MAX_ATTEMPTS) {
+    return NextResponse.json({ error: 'No more attempts remaining' }, { status: 400 })
+  }
   const guessNorm = normalizeString(canonicalGuess)
   const targetNorm = normalizeString(targetArtist)
   const targetLastName = normalizeString(targetArtist.split(' ').filter(Boolean).pop() || '')
