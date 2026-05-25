@@ -2183,24 +2183,32 @@ export default function Home({ initialDate }: HomeProps) {
                   </p>
                 </div>
                 <div className="space-y-1">
-                  {[1, 2, 3, 4, 5].map((n) => {
-                    const count = communityStats.distribution[n] ?? 0
-                    const maxCount = Math.max(...Object.values(communityStats.distribution), 1)
-                    const pct = Math.round((count / maxCount) * 100)
-                    const isMyScore = success && attemptsHistory.length === n
-                    return (
-                      <div key={n} className="flex items-center gap-2">
-                        <span className="w-3 text-[10px] text-gray-400 text-right shrink-0">{n}</span>
-                        <div className="flex-1 bg-gray-200 rounded-sm h-3 overflow-hidden">
-                          <div
-                            className={`h-full rounded-sm transition-all duration-500 ${isMyScore ? 'bg-gray-900' : 'bg-gray-400'}`}
-                            style={{ width: pct > 0 ? `${Math.max(pct, 4)}%` : '0%' }}
-                          />
+                  {(() => {
+                    const maxCount = Math.max(...[1,2,3,4,5].map(n => communityStats.distribution[n] ?? 0), 1)
+                    return [1, 2, 3, 4, 5].map((n) => {
+                      const count = communityStats.distribution[n] ?? 0
+                      const pct = Math.round((count / maxCount) * 100)
+                      const isMyScore = success && attemptsHistory.length === n
+                      return (
+                        <div key={n} className="flex items-center gap-2">
+                          <span className={`w-3 text-[10px] text-right shrink-0 ${isMyScore ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}>{n}</span>
+                          <div className="flex-1 h-4 flex items-center">
+                            {count === 0 ? (
+                              <div className="w-full h-px bg-gray-200" />
+                            ) : (
+                              <div className="w-full h-4 bg-gray-100 rounded-sm overflow-hidden">
+                                <div
+                                  className={`h-full rounded-sm transition-all duration-500 ${isMyScore ? 'bg-gray-800' : 'bg-gray-300'}`}
+                                  style={{ width: `${Math.max(pct, 6)}%` }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <span className={`w-5 text-[10px] text-right shrink-0 ${isMyScore ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}>{count || '–'}</span>
                         </div>
-                        <span className="w-5 text-[10px] text-gray-400 text-right shrink-0">{count}</span>
-                      </div>
-                    )
-                  })}
+                      )
+                    })
+                  })()}
                 </div>
               </div>
             ) : null}
