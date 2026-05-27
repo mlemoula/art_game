@@ -1661,20 +1661,20 @@ export default function Home({ initialDate }: HomeProps) {
       <style jsx global>{`
         @keyframes confetti-fall {
           0% {
-            transform: translateY(-20px);
-            opacity: 0;
+            transform: translateY(0) rotate(0deg);
+            opacity: 1;
           }
-          20% {
+          80% {
             opacity: 1;
           }
           100% {
-            transform: translateY(60px);
+            transform: translateY(60vh) rotate(360deg);
             opacity: 0;
           }
         }
 
         .animate-fall {
-          animation: confetti-fall 1.2s ease-out forwards;
+          animation: confetti-fall 1.6s ease-in forwards;
         }
         .stats-card {
           background-color: rgba(255, 255, 255, 0.95);
@@ -2133,17 +2133,17 @@ export default function Home({ initialDate }: HomeProps) {
         <div className="mt-6 w-full flex flex-col items-center gap-5">
           <div className="relative w-full max-w-[360px] border border-gray-200 rounded-2xl p-4 text-left space-y-3 bg-white shadow-sm">
             {success && (
-              <div className="absolute inset-x-0 top-0 h-0 overflow-visible pointer-events-none" aria-hidden="true" style={{ zIndex: 10 }}>
+              <div className="fixed inset-x-0 top-0 h-0 overflow-visible pointer-events-none" aria-hidden="true" style={{ zIndex: 50 }}>
                 {['#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6','#f97316','#06b6d4','#ec4899'].map((color, i) => (
                   <span
                     key={color}
                     className="absolute animate-fall rounded-sm"
                     style={{
-                      left: `${8 + i * 12}%`,
-                      width: 7,
-                      height: 7,
+                      left: `${5 + i * 13}%`,
+                      width: 8,
+                      height: 8,
                       backgroundColor: color,
-                      animationDelay: `${i * 0.07}s`,
+                      animationDelay: `${i * 0.1}s`,
                       top: 0,
                     }}
                   />
