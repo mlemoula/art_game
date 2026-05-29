@@ -38,15 +38,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return baseEntries
   }
 
-  const solutionEntries: MetadataRoute.Sitemap = data
+  const dates = data
     .map((entry) => entry.date)
     .filter((date): date is string => Boolean(date))
-    .map((date) => ({
-      url: buildSolutionUrl(date),
-      changeFrequency: 'monthly',
-      priority: 0.7,
-      lastModified: new Date(`${date}T00:00:00.000Z`),
-    }))
 
-  return [...baseEntries, ...solutionEntries]
+  const puzzleEntries: MetadataRoute.Sitemap = dates.map((date) => ({
+    url: `${APP_BASE_URL}/puzzle/${encodeURIComponent(date)}`,
+    changeFrequency: 'monthly' as const,
+    priority: 0.6,
+    lastModified: new Date(`${date}T00:00:00.000Z`),
+  }))
+
+  const solutionEntries: MetadataRoute.Sitemap = dates.map((date) => ({
+    url: buildSolutionUrl(date),
+    changeFrequency: 'monthly' as const,
+    priority: 0.7,
+    lastModified: new Date(`${date}T00:00:00.000Z`),
+  }))
+
+  return [...baseEntries, ...puzzleEntries, ...solutionEntries]
 }
