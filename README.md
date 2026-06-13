@@ -1,7 +1,7 @@
 # Who painted this?
 
 Minimalist daily one minute art guessing game powered by Next.js and Supabase.
-👉 https://whopaintedthis.vercel.app/
+👉 https://signalbeat.studio
 
 ## Deploy
 1. Install deps: `npm install`.
@@ -87,7 +87,7 @@ Tracking is built in:
 - story URL: `utm_source=instagram&utm_medium=story`
 - reveal CTA URL: `utm_source=instagram&utm_medium=today`
 
-By default it uses `https://whopaintedthis.vercel.app` and the public Supabase keys from `.env.local`.
+By default it uses `https://signalbeat.studio` and the public Supabase keys from `.env.local`.
 
 Useful flags:
 

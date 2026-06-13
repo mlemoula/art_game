@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { supabase } from '@/lib/supabaseClient'
 import { getTodayDateKey, normalizeDayKey, resolvePlayableDate } from '@/lib/dateUtils'
 
-export const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://whopaintedthis.vercel.app').replace(/\/+$/, '')
+export const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://signalbeat.studio').replace(/\/+$/, '')
 export const HOME_TITLE = 'Who painted this?'
 export const HOME_DESCRIPTION =
   'A daily art quiz: one painting, 5 tries to guess the artist. Test your art history knowledge with works by Vermeer, Monet, Picasso and more.'

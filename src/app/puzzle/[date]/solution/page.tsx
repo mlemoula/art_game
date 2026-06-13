@@ -16,7 +16,7 @@ type PuzzleSolutionPageProps = {
   params: Promise<{ date: string }>
 }
 
-const BASE_URL = 'https://whopaintedthis.vercel.app'
+const BASE_URL = 'https://signalbeat.studio'
 
 export async function generateMetadata({ params }: PuzzleSolutionPageProps) {
   const { date } = await params

@@ -3,7 +3,7 @@ import type { MetadataRoute } from 'next'
 import { getTodayDateKey } from '@/lib/dateUtils'
 import { supabase } from '@/lib/supabaseClient'
 
-const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://whopaintedthis.vercel.app').replace(/\/+$/, '')
+const APP_BASE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://signalbeat.studio').replace(/\/+$/, '')
 
 export const revalidate = 3600
 

@@ -161,7 +161,7 @@ Who painted this? · One-minute art puzzle
 Puzzle solved.
 ✅ × × × ×
 Can you beat me?
-https://whopaintedthis.vercel.app/puzzle/2026-05-24
+https://signalbeat.studio/puzzle/2026-05-24
 ```
 
 C'est correct mais trop générique. Comparez à Framed qui affiche directement le film derrière un spoiler progressif. La mécanique de zoom devrait se *voir* dans le partage.

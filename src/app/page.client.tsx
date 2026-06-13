@@ -1039,7 +1039,7 @@ export default function Home({ initialDate }: HomeProps) {
       (process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, '') ||
         (typeof window !== 'undefined'
           ? window.location.origin
-          : 'https://whopaintedthis.vercel.app'))
+          : 'https://signalbeat.studio'))
     const path = art.date ? `/puzzle/${encodeURIComponent(art.date)}` : '/'
     const shareUrl = `${appUrl}${path}`
 

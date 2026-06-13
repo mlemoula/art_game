@@ -4,7 +4,7 @@ import ArchiveContent, { type ArchiveArtwork } from './ArchiveContent'
 
 const ARCHIVE_DESCRIPTION =
   'Replay up to 30 recent artworks and open detailed artist and painting information after you complete each challenge.'
-const BASE_URL = 'https://whopaintedthis.vercel.app'
+const BASE_URL = 'https://signalbeat.studio'
 
 export const revalidate = 3600
 
