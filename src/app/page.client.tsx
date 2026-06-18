@@ -1055,7 +1055,7 @@ export default function Home({ initialDate }: HomeProps) {
     const puzzleTag = art.puzzle_number ? `#${art.puzzle_number} ` : ''
 
     const text = [
-      `🎨 Who Painted This? ${puzzleTag}— ${score}`,
+      `Who Painted This? ${puzzleTag}`,
       compactGlyphs,
     ].join('\n')
 
