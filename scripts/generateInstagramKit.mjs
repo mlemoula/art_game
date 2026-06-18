@@ -101,7 +101,7 @@ const buildCaption = ({ artist, title, year, museum, artistSnippet, paintingSnip
   ``,
   ...(artistSnippet ? [artistSnippet, ``] : []),
   ...(paintingSnippet ? [paintingSnippet, ``] : []),
-  `Who Painted This? Guess the daily puzzle 🎨`,
+  `Test your knowledge and try to guess who painted today's daily puzzle based on a small snippet of the artwork 🎨`,
   `Link in bio`,
   ``,
   tags.join(' '),
