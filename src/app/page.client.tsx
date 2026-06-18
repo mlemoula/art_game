@@ -36,6 +36,7 @@ const normalizeString = (str: string) =>
 
 const FALLBACK_ARTISTS: ArtistRecommendation[] = []
 const PROGRESS_KEY_PREFIX = 'art-progress-'
+const MIN_STATS_SAMPLE = 3
 const DAY_MS = 24 * 60 * 60 * 1000
 const MOBILE_WIDTH_BREAKPOINT = 768
 const WIKIMEDIA_HEAVY_BYTES_THRESHOLD = 3 * 1024 * 1024
@@ -1004,26 +1005,74 @@ export default function Home({ initialDate }: HomeProps) {
     }
   }, [displaySrc])
 
-  useEffect(() => {
-    if (!finished || !artId || !userToken || playSaved || !attemptsHistory.length)
-      return
-    const payload = {
-      daily_id: artId,
-      attempts: attemptsHistory.length,
-      success,
-      user_token: userToken,
-      attempts_data: attemptsHistory,
-    }
-    const persistPlay = async () => {
-      try {
-        const { error } = await supabase.from('plays').insert(payload)
-        if (!error) setPlaySaved(true)
-      } catch {
-        // ignore, fallback to local history
-      }
-    }
-    persistPlay()
-  }, [finished, artId, userToken, playSaved, attemptsHistory, success])
+	useEffect(() => {
+	  if (!finished || !artId) {
+	    setCommunityStats(null)
+	    return
+	  }
+	  if (!userToken) return
+
+	  let cancelled = false
+
+	  if (playSaved) {
+	    // Session reprise après rechargement : la partie est déjà enregistrée,
+	    // on relit juste l'agrégat (sans réinsérer).
+	    const loadStats = async () => {
+	      try {
+	        const response = await fetch(`/api/puzzle/community-stats?dailyId=${artId}`)
+	        const payload = await response.json().catch(() => null)
+	        if (cancelled || !response.ok || !payload) return
+	        const total = Number(payload.total) || 0
+	        const successCount = Number(payload.successCount) || 0
+	        setCommunityStats({
+	          total,
+	          successRate: total ? Math.round((successCount / total) * 100) : 0,
+	          distribution: payload.distribution || {},
+	        })
+	      } catch {
+	        if (!cancelled) setCommunityStats(null)
+	      }
+	    }
+	    loadStats()
+	    return () => {
+	      cancelled = true
+	    }
+	  }
+
+	  if (!attemptsHistory.length) return
+
+	  const recordPlay = async () => {
+	    try {
+	      const response = await fetch('/api/puzzle/record-play', {
+	        method: 'POST',
+	        headers: { 'Content-Type': 'application/json' },
+	        body: JSON.stringify({
+	          dailyId: artId,
+	          userToken,
+	          attempts: attemptsHistory.length,
+	          success,
+	          attemptsData: attemptsHistory,
+	        }),
+	      })
+	      const payload = await response.json().catch(() => null)
+	      if (cancelled || !response.ok || !payload) return
+	      setPlaySaved(true)
+	      const total = Number(payload.total) || 0
+	      const successCount = Number(payload.successCount) || 0
+	      setCommunityStats({
+	        total,
+	        successRate: total ? Math.round((successCount / total) * 100) : 0,
+	        distribution: payload.distribution || {},
+	      })
+	    } catch {
+	      // pas de fallback local : l'effet se redéclenchera si playSaved reste false
+	    }
+	  }
+	  recordPlay()
+	  return () => {
+	    cancelled = true
+	  }
+	}, [finished, artId, userToken, playSaved, attemptsHistory, success])
 
   const shareGlyphs = useMemo(() => {
     const tokens = Array.from({ length: maxAttempts }, (_, idx) => {
@@ -1105,48 +1154,6 @@ export default function Home({ initialDate }: HomeProps) {
       window.localStorage.setItem('art_game_help_seen', '1')
     }
   }
-
-  useEffect(() => {
-    if (!finished || !artId) {
-      setCommunityStats(null)
-      return
-    }
-    let cancelled = false
-    const fetchCommunityStats = async () => {
-      try {
-        const { data, count } = await supabase
-          .from('plays')
-          .select('attempts, success', { count: 'exact' })
-          .eq('daily_id', artId)
-        if (!cancelled && data) {
-          const total = count ?? data.length
-          if (!total) {
-            setCommunityStats(null)
-            return
-          }
-          const successCount = data.filter((row) => normalizeSuccessFlag(row.success)).length
-          const successRate = Math.round((successCount / total) * 100)
-          const distribution: Record<number, number> = {}
-          for (let n = 1; n <= 5; n++) {
-            distribution[n] = data.filter(
-              (row) =>
-                normalizeSuccessFlag(row.success) &&
-                typeof row.attempts === 'number' &&
-                row.attempts === n
-            ).length
-          }
-          setCommunityStats({ total, successRate, distribution })
-        }
-      } catch {
-        if (!cancelled) setCommunityStats(null)
-      }
-    }
-    fetchCommunityStats()
-    return () => {
-      cancelled = true
-    }
-  }, [finished, artId])
-
 
   // Sauvegarde locale de la progression du jour
   useEffect(() => {
@@ -2177,10 +2184,21 @@ export default function Home({ initialDate }: HomeProps) {
             {communityStats ? (
               <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3 stats-panel">
                 <p className="text-[10px] uppercase tracking-[0.35em] text-gray-400 mb-2">Today&apos;s results</p>
-                {communityStats.total < 10 ? (
-                  <p className="text-[11px] text-gray-400 text-center py-1">
-                    {communityStats.total === 1 ? 'You\'re the first today.' : `${communityStats.total} players so far — check back later.`}
-                  </p>
+                {communityStats.total < MIN_STATS_SAMPLE ? (
+				  <div className="text-center py-1 space-y-2">
+				    <p className="text-[11px] text-gray-400">
+				      {communityStats.total === 1
+				        ? "You're the first to play today."
+				        : `${communityStats.total} players so far today.`}
+				    </p>
+				    <button
+				      type="button"
+				      onClick={() => void handleShare()}
+				      className="text-[10px] uppercase tracking-[0.25em] underline decoration-dotted text-gray-500 hover:text-gray-800"
+				    >
+				      Invite someone to compare scores →
+				    </button>
+				  </div>
                 ) : (
                   <>
                     <p className="text-[10px] text-gray-400 mb-2">

@@ -189,3 +189,38 @@ export const getCachedMovementPeers = unstable_cache(
   ['movement-peers'],
   { revalidate: 604800 }
 )
+
+export type CommunityStats = {
+  total: number
+  successCount: number
+  distribution: Record<number, number>
+}
+
+export const getCachedCommunityStats = unstable_cache(
+  async (dailyId: number): Promise<CommunityStats> => {
+    const [{ count: total }, { count: successCount }, { data: successRows }] = await Promise.all([
+      supabase.from('plays').select('*', { count: 'exact', head: true }).eq('daily_id', dailyId),
+      supabase
+        .from('plays')
+        .select('*', { count: 'exact', head: true })
+        .eq('daily_id', dailyId)
+        .eq('success', true),
+      supabase.from('plays').select('attempts').eq('daily_id', dailyId).eq('success', true),
+    ])
+
+    const distribution: Record<number, number> = {}
+    ;(successRows ?? []).forEach((row) => {
+      const attempts = typeof row.attempts === 'number' ? row.attempts : null
+      if (attempts === null) return
+      distribution[attempts] = (distribution[attempts] ?? 0) + 1
+    })
+
+    return {
+      total: total ?? 0,
+      successCount: successCount ?? 0,
+      distribution,
+    }
+  },
+  ['community-stats'],
+  { revalidate: 20 }
+)
