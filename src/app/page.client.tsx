@@ -2359,7 +2359,7 @@ export default function Home({ initialDate }: HomeProps) {
       )}
       <div className="mt-6 flex justify-center gap-3 text-[10px] tracking-[0.35em] uppercase text-center text-gray-400 dark:text-gray-500">
         <a
-          href="https://www.linkedin.com/in/martin-lemoulant/"
+          href="https://www.instagram.com/dailyartguess/"
           target="_blank"
           rel="noreferrer"
           className="underline decoration-dotted hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
