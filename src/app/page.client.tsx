@@ -2394,6 +2394,23 @@ export default function Home({ initialDate }: HomeProps) {
           archive
         </Link>
       </div>
+      <div className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[10px] tracking-[0.35em] uppercase text-center text-gray-400 dark:text-gray-500">
+        {[
+          { name: "CertKit", url: "https://certkit.signalbeat.studio" },
+          { name: "MockStack", url: "https://mockstack.signalbeat.studio" },
+          { name: "Markly", url: "https://watermark.signalbeat.studio" },
+          { name: "CatalogForge", url: "https://catalog.signalbeat.studio" },
+          { name: "TextTruth", url: "https://texttruth.signalbeat.studio" },
+        ].map((t) => (
+          <a
+            key={t.url}
+            href={t.url}
+            className="underline decoration-dotted hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+          >
+            {t.name}
+          </a>
+        ))}
+      </div>
       <Analytics />
     </main>
   )
