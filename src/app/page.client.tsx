@@ -2401,6 +2401,7 @@ export default function Home({ initialDate }: HomeProps) {
           { name: "Markly", url: "https://watermark.signalbeat.studio" },
           { name: "CatalogForge", url: "https://catalog.signalbeat.studio" },
           { name: "TextTruth", url: "https://texttruth.signalbeat.studio" },
+          { name: "Will My Sofa Fit?", url: "https://willmysofafit.signalbeat.studio" },
         ].map((t) => (
           <a
             key={t.url}
