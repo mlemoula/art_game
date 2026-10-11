@@ -1,4 +1,6 @@
-const FDA_RECALLS_URL = "https://www.fda.gov/animal-veterinary/safety-health/recalls-withdrawals";
+import PetWaitlistForm from "./PetWaitlistForm";
+
+const FDA_RECALLS_URL ="https://www.fda.gov/animal-veterinary/safety-health/recalls-withdrawals";
 
 // RecallCheck is NOT a working checker: it has no recall data behind it.
 // This page must never display a "clear" / "no recall" verdict. If a real checker is built later,
@@ -69,6 +71,20 @@ export default function PetRecallCheckerComingSoon() {
           transition: transform 0.1s, background 0.15s;
         }
         .pet-btn:active { transform: scale(0.98); background: var(--pet-yellow-active); }
+        .pet-btn-submit { border: none; cursor: pointer; font-family: inherit; }
+        .pet-btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .pet-input {
+          display: block; width: 100%; height: 52px; margin-top: 16px; padding: 0 14px;
+          background: #FFFFFF; border: 2px solid #E5E5E5; border-radius: 14px; outline: none;
+          font-family: inherit; font-size: 16px; font-weight: 500; color: var(--pet-ink);
+          transition: border-color 0.15s;
+        }
+        .pet-input:focus { border-color: var(--pet-ink); }
+        .pet-input::placeholder { color: #A3A3A3; font-weight: 400; }
+        .pet-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .pet-ok { color: #166534; font-weight: 600; }
+        .pet-err { color: #991B1B; margin-top: 12px; font-weight: 600; }
 
         .pet-footnote { margin-top: auto; padding-top: 32px; font-size: 12px; color: #737373; line-height: 1.5; }
       `}</style>
@@ -101,6 +117,8 @@ export default function PetRecallCheckerComingSoon() {
             Open the FDA recalls list
           </a>
         </div>
+
+        <PetWaitlistForm />
 
         <div className="pet-footnote">
           The FDA list covers the United States only. RecallCheck is an unfinished prototype and is not affiliated
