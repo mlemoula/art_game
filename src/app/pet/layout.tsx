@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 
+// This page is an unfinished prototype with no recall data: keep it out of search results.
 export const metadata: Metadata = {
-  title: "Pet Food Recall Checker — Is Your Dog Food Recalled?",
+  title: "RecallCheck — not live yet",
   description:
-    "Enter the brand and lot number from the bag to check it against pet food recalls. Free, instant.",
-  robots: { index: true, follow: true },
+    "Early prototype. This page cannot check pet food recalls yet. See the official FDA recalls list instead.",
+  robots: { index: false, follow: false },
 };
 
 export default function PetLayout({ children }: { children: React.ReactNode }) {
