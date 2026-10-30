@@ -836,7 +836,11 @@ export default function Home({ initialDate }: HomeProps) {
     const handleDone = () => {
       if (!cancelled) setHdLoaded(true)
     }
-    if (img.complete) {
+    // Une erreur (ex. .tif non affichable) ne doit pas valider la source HD
+    const handleFail = () => {
+      if (!cancelled) setHdLoaded(false)
+    }
+    if (img.complete && img.naturalWidth > 0) {
       if (typeof img.decode === 'function') {
         img
           .decode()
@@ -857,7 +861,7 @@ export default function Home({ initialDate }: HomeProps) {
         handleDone()
       }
     }
-    img.onerror = handleDone
+    img.onerror = handleFail
     return () => {
       cancelled = true
     }
@@ -881,7 +885,7 @@ export default function Home({ initialDate }: HomeProps) {
       return
     }
     img.onload = finish
-    img.onerror = finish
+    img.onerror = () => {}
     return () => {
       cancelled = true
     }
