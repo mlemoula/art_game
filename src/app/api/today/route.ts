@@ -6,6 +6,7 @@ import {
   getCachedArtistProfile,
   getCachedMovementPeers,
   getCachedPuzzleNumber,
+  getLatestArtworkDateOnOrBefore,
 } from '@/lib/artCache'
 
 type PuzzlePayload = {
@@ -16,6 +17,7 @@ type PuzzlePayload = {
   year: string | null
   museum: string | null
   puzzle_number: number | null
+  fallback?: boolean // true when today had no puzzle and the latest available one is served
   target_profile: {
     movement: string | null
     country: string | null
@@ -55,14 +57,25 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  // ── Step 1: artwork + puzzle number (parallel, both cached) ─────────────
-  const [artwork, puzzleNumber] = await Promise.all([
-    getCachedDailyArtwork(targetStr),
-    getCachedPuzzleNumber(targetStr),
-  ])
+  // ── Step 1: artwork, then its puzzle number ──────────────────────────────
+  // The number is read only once the artwork exists: for a date without a puzzle the count equals
+  // the previous day's, and caching it would give the wrong number after the queue is refilled.
+  let artwork = await getCachedDailyArtwork(targetStr)
+
+  // "Today" with an empty queue (nothing scheduled for today): serve the latest available puzzle
+  // instead of a dead "Not found" page. Explicit ?date= / ?offset= requests keep their strict 404.
+  let isFallback = false
+  if (!artwork && !dateQuery && targetStr === todayStr) {
+    const latestDate = await getLatestArtworkDateOnOrBefore(todayStr)
+    if (latestDate && latestDate !== targetStr) {
+      artwork = await getCachedDailyArtwork(latestDate)
+      isFallback = Boolean(artwork)
+    }
+  }
   if (!artwork) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
+  const puzzleNumber = await getCachedPuzzleNumber(artwork.date)
 
   const artistName = artwork.artist
 
@@ -100,6 +113,7 @@ export async function GET(request: NextRequest) {
     year: artwork.year,
     museum: artwork.museum,
     puzzle_number: puzzleNumber,
+    ...(isFallback ? { fallback: true } : {}),
     target_profile: targetProfile,
   }
 

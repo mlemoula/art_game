@@ -31,9 +31,11 @@ export type DailyArtwork = {
 }
 
 // ─── Daily artwork ────────────────────────────────────────────────────────────
-// Same row all day → cache for 24 h
-export const getCachedDailyArtwork = unstable_cache(
-  async (date: string): Promise<DailyArtwork | null> => {
+// Same row all day → cache for 24 h.
+// A MISS must never be cached: throwing inside unstable_cache skips the cache write, otherwise a
+// "not found" for a day whose row is added later (refill) would stay 404 for 24 h.
+const loadDailyArtwork = unstable_cache(
+  async (date: string): Promise<DailyArtwork> => {
     const { data, error } = await supabase
       .from('daily_art')
       .select(
@@ -42,7 +44,7 @@ export const getCachedDailyArtwork = unstable_cache(
       .eq('date', date)
       .maybeSingle()
 
-    if (error || !data) return null
+    if (error || !data) throw new Error('daily-artwork-miss')
 
     return {
       id: data.id as number,
@@ -58,9 +60,30 @@ export const getCachedDailyArtwork = unstable_cache(
         typeof data.wiki_artist_summary_url === 'string' ? data.wiki_artist_summary_url : null,
     }
   },
-  ['daily-artwork'],
+  ['daily-artwork-v2'], // v2: drops entries where a missing day had been cached as null
   { revalidate: 86400 }
 )
+
+export const getCachedDailyArtwork = async (date: string): Promise<DailyArtwork | null> => {
+  try {
+    return await loadDailyArtwork(date)
+  } catch {
+    return null
+  }
+}
+
+// Most recent artwork date on or before `date` (not cached: it is only used when today has no puzzle).
+export const getLatestArtworkDateOnOrBefore = async (date: string): Promise<string | null> => {
+  const { data, error } = await supabase
+    .from('daily_art')
+    .select('date')
+    .lte('date', date)
+    .order('date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error || !data || typeof data.date !== 'string') return null
+  return data.date
+}
 
 // ─── Artist profile ───────────────────────────────────────────────────────────
 // Static biographical data → cache for 7 days
@@ -165,7 +188,7 @@ export const getCachedPuzzleNumber = unstable_cache(
     if (error || count === null) return null
     return count
   },
-  ['puzzle-number'],
+  ['puzzle-number-v2'], // v2: a number cached for a date that had no puzzle yet was one too low
   { revalidate: 604800 }
 )
 
