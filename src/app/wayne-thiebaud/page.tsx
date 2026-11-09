@@ -256,7 +256,7 @@ export default function WayneThiebaudGuide() {
                   target="_blank"
                   rel="sponsored nofollow noopener noreferrer"
                   aria-label={`View ${book.title}${book.subtitle ? `, ${book.subtitle}` : ''} on Amazon (affiliate link)`}
-                  className={`inline-block bg-[#2a2a2a] px-6 py-2.5 text-sm font-bold text-white transition hover:bg-black ${focusRing}`}
+                  className={`inline-block whitespace-nowrap bg-[#2a2a2a] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-black sm:px-6 ${focusRing}`}
                 >
                   View on Amazon
                 </a>
