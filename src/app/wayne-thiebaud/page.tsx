@@ -140,13 +140,13 @@ export default function WayneThiebaudGuide() {
               </div>
               <h3 className="mt-6 text-center text-base font-bold leading-snug">{book.title}</h3>
               <p className="mt-1 text-center text-xs text-[#222]/60">{book.byline}</p>
-              <p className="mt-4 text-sm leading-relaxed text-[#222]/80">{book.text}</p>
+              <p className="mb-6 mt-4 text-sm leading-relaxed text-[#222]/80">{book.text}</p>
               <a
                 href={amazonUrl(book.asin)}
                 target="_blank"
                 rel="sponsored nofollow noopener noreferrer"
                 aria-label={`View ${book.short} on Amazon (affiliate link)`}
-                className={`mt-6 block bg-[#2a2a2a] px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-black ${focusRing}`}
+                className={`mt-auto block bg-[#2a2a2a] px-4 py-3 text-center text-sm font-bold text-white transition hover:bg-black ${focusRing}`}
               >
                 View on Amazon
               </a>
