@@ -42,10 +42,10 @@ const BOOKS = [
     text: 'Focuses on the two subjects most people picture first: the cakes and pies, and the steep streets and city views.',
   },
   {
-    asin: '0847871622',
-    title: 'Wayne Thiebaud (Updated Edition)',
-    byline: 'Essays by Kenneth Baker, Nicholas Fox Weber, Karen Wilkin and John Yau',
-    text: 'A monograph for readers who want the critical writing as well as the pictures.',
+    asin: '0520418328',
+    title: 'Wayne Thiebaud: Art Comes from Art',
+    byline: 'Timothy Anglin Burgard and contributors, University of California Press',
+    text: 'Looks at how his work draws on earlier painting. A good pick if you like spotting influences, as in the daily art quiz.',
   },
 ]
 
