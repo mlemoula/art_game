@@ -12,7 +12,8 @@ type BookCoverProps = {
 }
 
 // Shows the publisher's cover; if there is none (or it fails to load) a plain typographic cover takes its place.
-export default function BookCover({ src, width, height, title, className = '', eager = false }: BookCoverProps) {
+// Only a handful of small covers: load them all at once so the page never shows empty frames.
+export default function BookCover({ src, width, height, title, className = '', eager = true }: BookCoverProps) {
   const [failed, setFailed] = useState(false)
 
   if (!src || failed) {
