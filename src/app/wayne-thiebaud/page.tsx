@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
-const BASE_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://www.signalbeat.studio').replace(/\/+$/, '')
+// The apex domain redirects to www, so the canonical must be the www URL (NEXT_PUBLIC_APP_URL is the apex)
+const BASE_URL = 'https://www.signalbeat.studio'
 const PAGE_URL = `${BASE_URL}/wayne-thiebaud`
 const AMAZON_TAG = 'waynethieba06-20'
 

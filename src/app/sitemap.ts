@@ -26,7 +26,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(`${today}T00:00:00.000Z`),
     },
     {
-      url: `${APP_BASE_URL}/wayne-thiebaud`,
+      url: 'https://www.signalbeat.studio/wayne-thiebaud',
       changeFrequency: 'monthly',
       priority: 0.6,
     },
