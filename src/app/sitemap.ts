@@ -25,6 +25,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
       lastModified: new Date(`${today}T00:00:00.000Z`),
     },
+    {
+      url: `${APP_BASE_URL}/wayne-thiebaud`,
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    },
   ]
 
   const { data, error } = await supabase
